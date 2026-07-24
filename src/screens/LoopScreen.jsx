@@ -2,28 +2,18 @@ import { motion } from 'framer-motion';
 import { useState, useEffect, useCallback } from 'react';
 import LoopDiagram from '../components/LoopDiagram';
 
-/* ----------------------------------------------------------------
-   LoopScreen
-   Props:
-     answers     — { habit, when, trigger, feeling }
-     onReset     — callback to return to opening screen
-   Stage 1: diagram + "Your Loop" label only
-   Stage 3+: LoopBreakerCard + share button
-   ---------------------------------------------------------------- */
-
 export default function LoopScreen({ answers, onReset }) {
   const [diagramDone, setDiagramDone] = useState(false);
   const [showYourLoop, setShowYourLoop] = useState(false);
 
   const handleDiagramComplete = useCallback(() => {
     setDiagramDone(true);
-    // "Your Loop" label fades in 500ms after diagram completes (step 11)
+    // Step 11: "Your Loop" label fades in 500ms after diagram completes
     setTimeout(() => setShowYourLoop(true), 500);
   }, []);
 
   return (
     <div className="screen loop-screen">
-      {/* Wordmark header */}
       <div className="loop-screen-header">
         <div className="wordmark">Loop</div>
         <div className="wordmark-tagline">understand what runs your habits.</div>
@@ -31,43 +21,27 @@ export default function LoopScreen({ answers, onReset }) {
 
       <div className="loop-screen-body">
         {/* Step 11: "Your Loop" label */}
-        <motion.div
+        <motion.h1
           className="your-loop-label"
           initial={{ opacity: 0 }}
           animate={{ opacity: showYourLoop ? 1 : 0 }}
-          transition={{ duration: 0.3, ease: 'easeOut' }}
-          aria-live="polite"
+          transition={{ duration: 0.35, ease: 'easeOut' }}
         >
           Your Loop
-        </motion.div>
+        </motion.h1>
 
         {/* The diagram */}
-        <div className="loop-diagram-container">
+        <div className="loop-diagram-wrap">
           <LoopDiagram
             answers={answers}
             onDiagramComplete={handleDiagramComplete}
           />
         </div>
 
-        {/* Stage 3+: Loop Breaker and Share will mount here */}
-        {/* Placeholder text during Stage 1 */}
-        {diagramDone && (
-          <motion.p
-            className="loading-text"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
-          >
-            Loop Breaker coming in Stage 3.
-          </motion.p>
-        )}
+        {/* Stage 3+: Loop Breaker and Share will appear here */}
 
-        {/* Reset link */}
-        <button
-          className="demo-link"
-          onClick={onReset}
-          style={{ marginTop: 'auto' }}
-        >
+        {/* Reset */}
+        <button className="back-link" onClick={onReset}>
           ← Start over
         </button>
       </div>

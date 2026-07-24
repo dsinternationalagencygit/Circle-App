@@ -1,137 +1,121 @@
-import { useEffect, useRef } from 'react';
-import { motion, useAnimate, useMotionValue, animate } from 'framer-motion';
+import { useEffect } from 'react';
+import { motion, animate, useMotionValue } from 'framer-motion';
 
-/* ----------------------------------------------------------------
-   LoopDiagram — animated SVG habit loop
-   320×320 viewBox, diamond layout:
-     CUE     (top)    cx=160, cy=52
-     CRAVING (right)  cx=268, cy=160
-     HABIT   (bottom) cx=160, cy=268
-     REWARD  (left)   cx=52,  cy=160
+/* ================================================================
+   LoopDiagram — Habit Loop animated SVG
+   320×320 viewBox | diamond node layout (all on r=108 from centre)
 
-   Animation sequence (11 steps, exact per spec):
-     1. Outer ring draws (stroke-dashoffset) 600ms
-     2. CUE node fades + scales in 400ms
-     3. Arc CUE→CRAVING draws 300ms
-     4. CRAVING node fades + scales in 400ms
-     5. Arc CRAVING→HABIT draws 300ms
-     6. HABIT node fades + scale-spring 400ms
-     7. Arc HABIT→REWARD (red, 2px) draws + "false reward" label 400ms
-     8. REWARD node fades + scales in 400ms
-     9. Arc REWARD→CUE (amber) draws + "sets up next trigger" label 400ms
-    10. HABIT→REWARD arc: continuous opacity pulse (0.6↔1.0, 2s loop, never stops)
-    11. "Your Loop" label fades in 300ms (500ms after diagram done — done in LoopScreen)
-   ---------------------------------------------------------------- */
+   Node centres:
+     CUE     (top)   (160, 52)
+     CRAVING (right) (268,160)
+     HABIT   (bottom)(160,268)
+     REWARD  (left)  ( 52,160)
 
-const NODE_R = 28; // radius = 28px → 56px diameter
+   Arc control-points (quadratic Bézier — corners of the diamond):
+     CUE→CRAVING   CP (268,  52) top-right corner
+     CRAVING→HABIT CP (268, 268) bottom-right corner
+     HABIT→REWARD  CP ( 52, 268) bottom-left corner  ← RED pulse
+     REWARD→CUE    CP ( 52,  52) top-left corner     ← AMBER
 
-// Node centres in 320×320 viewBox (diamond)
+   Animation uses Framer Motion pathLength (0→1) for arcs,
+   opacity+scale for nodes, and an infinite opacity oscillation
+   (1↔0.55, 2 s) for the red arc after it finishes drawing.
+   ================================================================ */
+
+const NODE_R = 28; // 56 px diameter
+
 const NODES = {
-  CUE:     { cx: 160, cy: 52,  label: 'CUE',     answerKey: 'when'    },
+  CUE:     { cx: 160, cy:  52, label: 'CUE',     answerKey: 'when'    },
   CRAVING: { cx: 268, cy: 160, label: 'CRAVING',  answerKey: 'trigger' },
   HABIT:   { cx: 160, cy: 268, label: 'HABIT',    answerKey: 'habit'   },
-  REWARD:  { cx: 52,  cy: 160, label: 'REWARD',   answerKey: 'feeling' },
+  REWARD:  { cx:  52, cy: 160, label: 'REWARD',   answerKey: 'feeling' },
 };
 
-// Return the point on a circle's perimeter towards a target direction
-function edgePt(node, dx, dy) {
-  const len = Math.sqrt(dx * dx + dy * dy);
+/** Point on node's perimeter in the direction of (cpx, cpy) */
+function edgeToward(node, cpx, cpy) {
+  const dx = cpx - node.cx;
+  const dy = cpy - node.cy;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
   return {
-    x: node.cx + (dx / len) * (NODE_R + 2),
-    y: node.cy + (dy / len) * (NODE_R + 2),
+    x: +(node.cx + (dx / len) * (NODE_R + 3)).toFixed(2),
+    y: +(node.cy + (dy / len) * (NODE_R + 3)).toFixed(2),
   };
 }
 
-// Build quadratic Bézier path (M startX startY Q cpx cpy endX endY)
-function arcPath(fromKey, toKey, cpx, cpy) {
-  const from = NODES[fromKey];
-  const to   = NODES[toKey];
-
-  // Direction from 'from' towards control point
-  const start = edgePt(from, cpx - from.cx, cpy - from.cy);
-  // Direction into 'to' from control point
-  const end   = edgePt(to,   to.cx - cpx,   to.cy - cpy);
-
-  return `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} Q ${cpx} ${cpy} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
+/** Quadratic Bézier: M edge_of_from Q cpx,cpy edge_of_to */
+function qPath(fromKey, toKey, cpx, cpy) {
+  const s = edgeToward(NODES[fromKey], cpx, cpy);
+  const e = edgeToward(NODES[toKey],   cpx, cpy);
+  return `M ${s.x},${s.y} Q ${cpx},${cpy} ${e.x},${e.y}`;
 }
 
-// Arrowhead marker
+/* ---- Subcomponents -------------------------------------------- */
+
 function Marker({ id, color }) {
   return (
-    <marker id={id} markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
-      <polygon points="0 0, 7 3.5, 0 7" fill={color} />
+    <marker
+      id={id}
+      markerWidth="7"
+      markerHeight="7"
+      refX="7"
+      refY="3.5"
+      orient="auto"
+      markerUnits="userSpaceOnUse"
+    >
+      <polygon points="0,0 7,3.5 0,7" fill={color} />
     </marker>
   );
 }
 
-/* AnimatedArc — draws via stroke-dashoffset, starts its own timer */
-function AnimatedArc({ id, fromKey, toKey, cpx, cpy, color, strokeWidth, delay, isPulse }) {
-  const pathRef = useRef(null);
-  const pulseOpacity = useMotionValue(1);
-
-  useEffect(() => {
-    let active = true;
-    const path = pathRef.current;
-    if (!path) return;
-
-    const len = path.getTotalLength();
-    path.style.strokeDasharray = len;
-    path.style.strokeDashoffset = len;
-
-    const timer = setTimeout(async () => {
-      if (!active) return;
-      // Draw the arc
-      await animate(path, { strokeDashoffset: 0 }, {
-        duration: strokeWidth === 2 ? 0.4 : 0.3,
-        ease: 'easeInOut',
-      });
-      // Start infinite pulse for HABIT→REWARD
-      if (isPulse && active) {
-        animate(pulseOpacity, 0.6, {
-          duration: 1,
-          ease: 'easeInOut',
-          repeat: Infinity,
-          repeatType: 'reverse',
-        });
-      }
-    }, delay);
-
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [delay, strokeWidth, isPulse]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const d = arcPath(fromKey, toKey, cpx, cpy);
-  const markerId = `arrow-${id}`;
-
+/** Normal arc — pathLength draw only */
+function Arc({ d, color, sw, markerId, delayS, dur }) {
   return (
     <motion.path
-      ref={pathRef}
       d={d}
       stroke={color}
-      strokeWidth={strokeWidth}
+      strokeWidth={sw}
       fill="none"
       markerEnd={`url(#${markerId})`}
-      style={{ opacity: pulseOpacity }}
+      initial={{ pathLength: 0 }}
+      animate={{ pathLength: 1 }}
+      transition={{ delay: delayS, duration: dur, ease: 'easeInOut' }}
     />
   );
 }
 
-/* ArcLabel — fades in shortly after its arc draws */
-function ArcLabel({ x, y, color, text, delay, drawDuration }) {
-  const [scope, anim] = useAnimate();
+/** Red arc — draws then starts infinite opacity pulse */
+function PulsingArc({ d, color, sw, markerId, delayS, dur }) {
+  const opacity = useMotionValue(1);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (scope.current) anim(scope.current, { opacity: 1 }, { duration: 0.25 });
-    }, delay + drawDuration * 1000 + 50);
-    return () => clearTimeout(timer);
-  }, [delay, drawDuration]); // eslint-disable-line react-hooks/exhaustive-deps
+    const t = setTimeout(() => {
+      animate(opacity, [1, 0.55, 1], {
+        duration: 2,
+        ease: 'easeInOut',
+        repeat: Infinity,
+      });
+    }, (delayS + dur) * 1000);
+    return () => clearTimeout(t);
+  }, [delayS, dur]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <text
-      ref={scope}
+    <motion.path
+      d={d}
+      stroke={color}
+      strokeWidth={sw}
+      fill="none"
+      markerEnd={`url(#${markerId})`}
+      initial={{ pathLength: 0 }}
+      animate={{ pathLength: 1 }}
+      transition={{ delay: delayS, duration: dur, ease: 'easeInOut' }}
+      style={{ opacity }}
+    />
+  );
+}
+
+function ArcLabel({ x, y, text, color, delayS }) {
+  return (
+    <motion.text
       x={x}
       y={y}
       textAnchor="middle"
@@ -139,52 +123,47 @@ function ArcLabel({ x, y, color, text, delay, drawDuration }) {
       fontFamily="'Space Grotesk', sans-serif"
       fontWeight="400"
       fill={color}
-      opacity="0"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay: delayS, duration: 0.3 }}
     >
       {text}
-    </text>
+    </motion.text>
   );
 }
 
-/* AnimatedNode — fades + scales in; HABIT node gets spring pulse */
-function AnimatedNode({ nodeKey, answer, delay, isHabit }) {
+function Node({ nodeKey, answer, delayS, isHabit }) {
   const node = NODES[nodeKey];
-  const [scope, anim] = useAnimate();
-
-  // Truncate answer to fit node (max ~12 chars)
-  const display = answer
-    ? answer.length > 12 ? answer.slice(0, 11) + '\u2026' : answer
-    : '';
-
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (!scope.current) return;
-      if (isHabit) {
-        await anim(scope.current, { opacity: 1, scale: 1 }, { duration: 0.2, ease: 'easeOut' });
-        // Spring pulse to draw attention to the HABIT node
-        await anim(scope.current, { scale: 1.14 }, {
-          type: 'spring', stiffness: 600, damping: 12,
-        });
-        await anim(scope.current, { scale: 1 }, {
-          type: 'spring', stiffness: 280, damping: 22,
-        });
-      } else {
-        await anim(scope.current, { opacity: 1, scale: 1 }, {
-          duration: 0.4, ease: [0.22, 1, 0.36, 1],
-        });
-      }
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [delay, isHabit]); // eslint-disable-line react-hooks/exhaustive-deps
+  const display =
+    answer
+      ? answer.length > 11
+        ? answer.slice(0, 10) + '\u2026'
+        : answer
+      : '';
 
   return (
     <motion.g
-      ref={scope}
-      style={{
-        opacity: 0,
-        scale: 0.65,
-        transformOrigin: `${node.cx}px ${node.cy}px`,
-      }}
+      style={{ transformOrigin: `${node.cx}px ${node.cy}px` }}
+      initial={{ opacity: 0, scale: 0.45 }}
+      animate={
+        isHabit
+          ? { opacity: 1, scale: [0.45, 1.15, 0.93, 1] }
+          : { opacity: 1, scale: 1 }
+      }
+      transition={
+        isHabit
+          ? {
+              delay: delayS,
+              duration: 0.55,
+              ease: 'easeOut',
+              times: [0, 0.45, 0.75, 1],
+            }
+          : {
+              delay: delayS,
+              duration: 0.38,
+              ease: [0.22, 1, 0.36, 1],
+            }
+      }
     >
       <circle
         cx={node.cx}
@@ -194,7 +173,7 @@ function AnimatedNode({ nodeKey, answer, delay, isHabit }) {
         stroke="#161616"
         strokeWidth="2"
       />
-      {/* Category label */}
+      {/* Category label — muted, small */}
       <text
         x={node.cx}
         y={node.cy - 5}
@@ -207,7 +186,7 @@ function AnimatedNode({ nodeKey, answer, delay, isHabit }) {
       >
         {node.label}
       </text>
-      {/* Answer label */}
+      {/* User's answer — ink, 600 weight */}
       <text
         x={node.cx}
         y={node.cy + 10}
@@ -223,58 +202,34 @@ function AnimatedNode({ nodeKey, answer, delay, isHabit }) {
   );
 }
 
-/* ----------------------------------------------------------------
+/* ================================================================
    Main export
-   ---------------------------------------------------------------- */
+   ================================================================ */
 export default function LoopDiagram({ answers, onDiagramComplete }) {
-  const ringRef = useRef(null);
-  const [ringScope, animRing] = useAnimate();
-
-  /* Cumulative delay schedule (ms):
-     0    → ring starts (600ms)
-     650  → CUE node (400ms)
-     1100 → arc CUE→CRAVING (300ms)
-     1450 → CRAVING node (400ms)
-     1900 → arc CRAVING→HABIT (300ms)
-     2250 → HABIT node (~500ms with spring)
-     2800 → arc HABIT→REWARD (400ms)
-     3250 → REWARD node (400ms)
-     3700 → arc REWARD→CUE (400ms)
-     4150 → diagram complete signal
+  /* Timing schedule (seconds):
+       0.00  outer ring starts drawing   (dur 0.60)
+       0.65  CUE node                    (dur 0.38)
+       1.10  arc CUE→CRAVING             (dur 0.30)
+       1.45  CRAVING node                (dur 0.38)
+       1.90  arc CRAVING→HABIT           (dur 0.30)
+       2.25  HABIT node (spring)         (dur 0.55)
+       2.85  arc HABIT→REWARD RED        (dur 0.40)
+       3.30  REWARD node                 (dur 0.38)
+       3.75  arc REWARD→CUE AMBER        (dur 0.40)
+       4.20  diagram complete → callback
   */
-  const D = {
-    ring:            0,
-    cue:           650,
-    arcCueCraving: 1100,
-    craving:       1450,
-    arcCravingHab: 1900,
-    habit:         2250,
-    arcHabReward:  2800,
-    reward:        3250,
-    arcRewardCue:  3700,
-    complete:      4150,
+  useEffect(() => {
+    const t = setTimeout(() => onDiagramComplete?.(), 4200);
+    return () => clearTimeout(t);
+  }, [onDiagramComplete]);
+
+  // Pre-compute all arc paths
+  const p = {
+    cueCraving: qPath('CUE',     'CRAVING', 268,  52),
+    cravingHab: qPath('CRAVING', 'HABIT',   268, 268),
+    habReward:  qPath('HABIT',   'REWARD',   52, 268),
+    rewardCue:  qPath('REWARD',  'CUE',      52,  52),
   };
-
-  // Step 1: outer ring
-  useEffect(() => {
-    if (!ringScope.current) return;
-    const ring = ringScope.current;
-    const circumference = 2 * Math.PI * 148;
-    ring.style.strokeDasharray = circumference;
-    ring.style.strokeDashoffset = circumference;
-
-    const t = setTimeout(() => {
-      animRing(ring, { strokeDashoffset: 0 }, { duration: 0.6, ease: 'easeInOut' });
-    }, D.ring);
-
-    return () => clearTimeout(t);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Diagram complete callback → LoopScreen shows "Your Loop" + Loop Breaker
-  useEffect(() => {
-    const t = setTimeout(() => onDiagramComplete?.(), D.complete);
-    return () => clearTimeout(t);
-  }, [onDiagramComplete]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <svg
@@ -282,86 +237,89 @@ export default function LoopDiagram({ answers, onDiagramComplete }) {
       width="100%"
       height="100%"
       role="img"
-      aria-label="Animated habit loop diagram showing CUE, CRAVING, HABIT, and REWARD nodes"
+      aria-label="Animated habit loop diagram showing CUE, CRAVING, HABIT and REWARD"
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
-        <Marker id="arrow-cue-craving"  color="#161616" />
-        <Marker id="arrow-craving-hab"  color="#161616" />
-        <Marker id="arrow-hab-reward"   color="#E8192C" />
-        <Marker id="arrow-reward-cue"   color="#F59E0B" />
+        <Marker id="m-cc"  color="#161616" />
+        <Marker id="m-ch"  color="#161616" />
+        <Marker id="m-hr"  color="#E8192C" />
+        <Marker id="m-rc"  color="#F59E0B" />
       </defs>
 
-      {/* Step 1: outer guide ring */}
-      <circle
-        ref={ringScope}
-        cx="160" cy="160" r="148"
+      {/* ── Step 1: outer guide ring ─────────────────────────── */}
+      <motion.circle
+        cx="160"
+        cy="160"
+        r="148"
         fill="none"
         stroke="#9B9B9B"
         strokeWidth="1"
+        initial={{ pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: 0.6, ease: 'easeInOut' }}
       />
 
-      {/* Arcs — rendered before nodes so nodes sit on top */}
+      {/* ── Arcs (behind nodes) ──────────────────────────────── */}
 
       {/* Step 3: CUE → CRAVING */}
-      <AnimatedArc
-        id="cue-craving"
-        fromKey="CUE" toKey="CRAVING"
-        cpx={268} cpy={52}
-        color="#161616" strokeWidth={1}
-        delay={D.arcCueCraving}
+      <Arc
+        d={p.cueCraving}
+        color="#161616" sw={1}
+        markerId="m-cc"
+        delayS={1.1} dur={0.3}
       />
 
       {/* Step 5: CRAVING → HABIT */}
-      <AnimatedArc
-        id="craving-hab"
-        fromKey="CRAVING" toKey="HABIT"
-        cpx={268} cpy={268}
-        color="#161616" strokeWidth={1}
-        delay={D.arcCravingHab}
+      <Arc
+        d={p.cravingHab}
+        color="#161616" sw={1}
+        markerId="m-ch"
+        delayS={1.9} dur={0.3}
       />
 
-      {/* Step 7: HABIT → REWARD (red, thick, pulse) */}
-      <AnimatedArc
-        id="hab-reward"
-        fromKey="HABIT" toKey="REWARD"
-        cpx={160} cpy={320}
-        color="#E8192C" strokeWidth={2}
-        delay={D.arcHabReward}
-        isPulse
+      {/* Step 7: HABIT → REWARD (red, thicker, then pulses forever) */}
+      <PulsingArc
+        d={p.habReward}
+        color="#E8192C" sw={2}
+        markerId="m-hr"
+        delayS={2.85} dur={0.4}
       />
 
       {/* Step 9: REWARD → CUE (amber) */}
-      <AnimatedArc
-        id="reward-cue"
-        fromKey="REWARD" toKey="CUE"
-        cpx={52} cpy={52}
-        color="#F59E0B" strokeWidth={1}
-        delay={D.arcRewardCue}
+      <Arc
+        d={p.rewardCue}
+        color="#F59E0B" sw={1}
+        markerId="m-rc"
+        delayS={3.75} dur={0.4}
       />
 
-      {/* Arc labels */}
+      {/* ── Arc labels ───────────────────────────────────────── */}
+      {/* "false reward" near HABIT→REWARD arc midpoint (bottom-left) */}
       <ArcLabel
-        x={160} y={314}
-        color="#E8192C" text="false reward"
-        delay={D.arcHabReward} drawDuration={0.4}
+        x={90} y={278}
+        text="false reward"
+        color="#E8192C"
+        delayS={3.3}
       />
+      {/* "sets up next trigger" near REWARD→CUE arc midpoint (top-left) */}
       <ArcLabel
-        x={86} y={94}
-        color="#F59E0B" text="sets up next trigger"
-        delay={D.arcRewardCue} drawDuration={0.4}
+        x={82} y={82}
+        text="sets up next trigger"
+        color="#F59E0B"
+        delayS={4.2}
       />
 
-      {/* Nodes — on top of arcs */}
+      {/* ── Nodes (in front of arcs) ─────────────────────────── */}
 
       {/* Step 2: CUE */}
-      <AnimatedNode nodeKey="CUE"     answer={answers?.when}    delay={D.cue}    />
+      <Node nodeKey="CUE"     answer={answers?.when}    delayS={0.65} />
       {/* Step 4: CRAVING */}
-      <AnimatedNode nodeKey="CRAVING" answer={answers?.trigger} delay={D.craving} />
-      {/* Step 6: HABIT (spring pulse) */}
-      <AnimatedNode nodeKey="HABIT"   answer={answers?.habit}   delay={D.habit}   isHabit />
+      <Node nodeKey="CRAVING" answer={answers?.trigger} delayS={1.45} />
+      {/* Step 6: HABIT — spring pulse */}
+      <Node nodeKey="HABIT"   answer={answers?.habit}   delayS={2.25} isHabit />
       {/* Step 8: REWARD */}
-      <AnimatedNode nodeKey="REWARD"  answer={answers?.feeling} delay={D.reward}  />
+      <Node nodeKey="REWARD"  answer={answers?.feeling} delayS={3.3}  />
     </svg>
   );
 }
