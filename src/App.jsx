@@ -5,49 +5,42 @@ import QuestionScreen from './screens/QuestionScreen';
 import LoopScreen from './screens/LoopScreen';
 import { VIKRAM_ANSWERS } from './data/questions';
 
-/*
-  App — top-level screen router
-  Screens: 'opening' | 'question' | 'loop'
-  
-  Stage 1: Only demo link wired ('opening' → 'loop' with Vikram's answers)
-  Stage 2: Full Q1→Q2→Q3→Q4→loop flow
-*/
-
-const EMPTY_ANSWERS = { habit: null, when: null, trigger: null, feeling: null };
+const EMPTY = { habit: null, when: null, trigger: null, feeling: null };
 
 export default function App() {
-  const [screen, setScreen] = useState('opening');
-  const [answers, setAnswers] = useState(EMPTY_ANSWERS);
-  const [currentQ, setCurrentQ] = useState(1); // 1 = Q2 (index in QUESTIONS array)
+  const [screen,   setScreen]   = useState('opening'); // 'opening' | 'question' | 'loop'
+  const [answers,  setAnswers]  = useState(EMPTY);
+  const [currentQ, setCurrentQ] = useState(1); // index into QUESTIONS[]; 1 = Q2
 
-  // Demo: skip to loop screen with Vikram's seeded answers
+  // Demo: jump straight to loop with Vikram's seeded answers
   function handleDemo() {
     setAnswers(VIKRAM_ANSWERS);
     setScreen('loop');
   }
 
-  // Stage 1: Q1 tiles do nothing (wired in Stage 2)
-  // Stage 2: Q1 triggers advance to Q2
+  // Called by every tile tap on every screen
   function handleAnswer(key, value) {
-    const updated = { ...answers, [key]: value };
-    setAnswers(updated);
+    const next = { ...answers, [key]: value };
+    setAnswers(next);
 
     if (key === 'habit') {
-      // Q1 answered → go to Q2
+      // Q1 answered on opening screen → advance to Q2
       setCurrentQ(1);
       setScreen('question');
     } else if (key === 'when') {
+      // Q2 → Q3
       setCurrentQ(2);
     } else if (key === 'trigger') {
+      // Q3 → Q4
       setCurrentQ(3);
     } else if (key === 'feeling') {
-      // Q4 answered → 800ms pause → loop screen
+      // Q4 → 800ms pause → loop screen
       setTimeout(() => setScreen('loop'), 800);
     }
   }
 
   function handleReset() {
-    setAnswers(EMPTY_ANSWERS);
+    setAnswers(EMPTY);
     setCurrentQ(1);
     setScreen('opening');
   }
@@ -55,10 +48,7 @@ export default function App() {
   return (
     <div className="app">
       {screen === 'opening' && (
-        <OpeningScreen
-          onAnswer={handleAnswer}
-          onDemo={handleDemo}
-        />
+        <OpeningScreen onAnswer={handleAnswer} onDemo={handleDemo} />
       )}
       {screen === 'question' && (
         <QuestionScreen
@@ -68,10 +58,7 @@ export default function App() {
         />
       )}
       {screen === 'loop' && (
-        <LoopScreen
-          answers={answers}
-          onReset={handleReset}
-        />
+        <LoopScreen answers={answers} onReset={handleReset} />
       )}
     </div>
   );

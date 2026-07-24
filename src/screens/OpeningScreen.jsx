@@ -1,51 +1,79 @@
+import { motion } from 'framer-motion';
 import { QUESTIONS, VIKRAM_ANSWERS } from '../data/questions';
 
-/* ----------------------------------------------------------------
-   OpeningScreen
-   - Wordmark + tagline
-   - "What is running you?" hero question
-   - Q1 tiles (four habit options)
-   - "See Vikram's Loop →" demo link
-   
-   Stage 1: only demo link is wired
-   Stage 2: Q1 tiles fire onAnswer('habit', value)
-   ---------------------------------------------------------------- */
-
 export default function OpeningScreen({ onAnswer, onDemo }) {
-  const q1 = QUESTIONS[0]; // "What is running you?" with Q1 options
+  const q1 = QUESTIONS[0];
 
   return (
     <div className="screen opening-screen">
-      {/* Wordmark */}
-      <div className="wordmark">Loop</div>
-      <div className="wordmark-tagline">understand what runs your habits.</div>
+      <motion.div
+        className="wordmark"
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+      >
+        Loop
+      </motion.div>
+      <motion.div
+        className="wordmark-sub"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.35, delay: 0.1 }}
+      >
+        understand what runs your habits.
+      </motion.div>
 
-      {/* Hero */}
       <div className="opening-hero">
-        <h1 className="opening-question">{q1.text}</h1>
+        <motion.p
+          className="opening-eyebrow"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.18 }}
+        >
+          Four taps. No typing.
+        </motion.p>
 
-        <div className="tile-grid">
-          {q1.options.map((option) => (
-            <button
+        <motion.h1
+          className="opening-question"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.38, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {q1.text}
+        </motion.h1>
+
+        <motion.div
+          className="tile-grid"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.32 }}
+        >
+          {q1.options.map((option, i) => (
+            <motion.button
               key={option}
               className="tile"
               id={`tile-${option.toLowerCase().replace(/\s+/g, '-')}`}
-              onClick={() => onAnswer?.(q1.key, option)}
+              onClick={() => onAnswer(q1.key, option)}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.28, delay: 0.34 + i * 0.06 }}
             >
               {option}
-            </button>
+            </motion.button>
           ))}
-        </div>
+        </motion.div>
 
-        {/* Demo jump link */}
-        <button
+        <motion.button
           className="demo-link"
           id="demo-link"
           onClick={onDemo}
-          aria-label="See Vikram's Loop — a pre-filled demo"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.6 }}
+          aria-label="Skip to Vikram's pre-filled loop demo"
         >
-          See Vikram&apos;s Loop →
-        </button>
+          See Vikram's Loop →
+        </motion.button>
       </div>
     </div>
   );

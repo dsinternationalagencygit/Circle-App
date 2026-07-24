@@ -1,81 +1,92 @@
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { QUESTIONS } from '../data/questions';
 
 export default function QuestionScreen({ currentQ, answers, onAnswer }) {
   const question = QUESTIONS[currentQ];
-  // Progress: Q2=25%, Q3=50%, Q4=75%, after Q4=100%
-  const progressPct = (currentQ / QUESTIONS.length) * 100;
+  const totalQuestions = QUESTIONS.length; // 4
+  // Q1 is on opening screen, so Q2 = step 2 of 4, Q3 = 3 of 4, Q4 = 4 of 4
+  const stepNum = currentQ + 1; // currentQ is 1-indexed from 1
+  const progressPct = (currentQ / totalQuestions) * 100;
 
-  // Build chips from answers collected so far (Q1 answer + any prior question answers)
+  // Chips = all answered questions so far (Q1 = answers.habit + any Q2/Q3 answers)
   const chips = QUESTIONS.slice(0, currentQ)
     .map((q) => answers[q.key])
     .filter(Boolean);
 
   return (
     <div className="screen question-screen">
-      {/* Progress bar — fixed at top of viewport */}
-      <div className="progress-bar-track">
+      {/* Fixed progress bar at top */}
+      <div className="progress-track">
         <motion.div
-          className="progress-bar-fill"
-          initial={{ width: `${((currentQ - 1) / QUESTIONS.length) * 100}%` }}
+          className="progress-fill"
+          initial={{ width: `${((currentQ - 1) / totalQuestions) * 100}%` }}
           animate={{ width: `${progressPct}%` }}
           transition={{ duration: 0.4, ease: 'easeOut' }}
         />
       </div>
 
-      {/* Header */}
       <div className="question-header">
         <div className="wordmark">Loop</div>
-        <div className="wordmark-tagline">understand what runs your habits.</div>
+        <div className="wordmark-sub">understand what runs your habits.</div>
 
-        {/* Answer chips build as questions are answered */}
-        {chips.length > 0 && (
-          <div className="answer-chips" aria-label="Your answers so far">
+        {/* Answer chips */}
+        <div className="chips-row" aria-label="Your answers so far">
+          <AnimatePresence>
             {chips.map((chip) => (
               <motion.span
                 key={chip}
-                className="answer-chip"
-                initial={{ opacity: 0, scale: 0.85 }}
+                className="chip"
+                initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.2 }}
               >
                 {chip}
               </motion.span>
             ))}
-          </div>
-        )}
+          </AnimatePresence>
+        </div>
+
+        <p className="q-meta">
+          Question {stepNum} of {totalQuestions}
+        </p>
       </div>
 
-      {/* Question body */}
       <div className="question-body">
-        <motion.h1
-          className="question-text"
-          key={question.id}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.28, ease: 'easeOut' }}
-        >
-          {question.text}
-        </motion.h1>
+        <AnimatePresence mode="wait">
+          <motion.h1
+            key={question.id}
+            className="question-text"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.26, ease: 'easeOut' }}
+          >
+            {question.text}
+          </motion.h1>
+        </AnimatePresence>
 
-        <motion.div
-          className="tile-grid"
-          key={`grid-${question.id}`}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.22, delay: 0.08 }}
-        >
-          {question.options.map((option) => (
-            <button
-              key={option}
-              className="tile"
-              id={`tile-${option.toLowerCase().replace(/\s+/g, '-')}`}
-              onClick={() => onAnswer?.(question.key, option)}
-            >
-              {option}
-            </button>
-          ))}
-        </motion.div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`grid-${question.id}`}
+            className="tile-grid"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            {question.options.map((option) => (
+              <button
+                key={option}
+                className="tile"
+                id={`tile-${option.toLowerCase().replace(/\s+/g, '-')}`}
+                onClick={() => onAnswer?.(question.key, option)}
+              >
+                {option}
+              </button>
+            ))}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

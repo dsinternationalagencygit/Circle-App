@@ -1,36 +1,45 @@
+import { useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { useState, useEffect, useCallback } from 'react';
 import LoopDiagram from '../components/LoopDiagram';
+import StaticLoopDiagram from '../components/StaticLoopDiagram';
+import LoopBreakerCard from '../components/LoopBreakerCard';
+import ShareButton from '../components/ShareButton';
+import { getLoopBreaker } from '../services/gemini';
 
 export default function LoopScreen({ answers, onReset }) {
-  const [diagramDone, setDiagramDone] = useState(false);
-  const [showYourLoop, setShowYourLoop] = useState(false);
+  const [showLabel,   setShowLabel]   = useState(false);
+  const [showBreaker, setShowBreaker] = useState(false);
+  const [breakerText, setBreakerText] = useState(null);
+  const captureRef = useRef(null);
 
   const handleDiagramComplete = useCallback(() => {
-    setDiagramDone(true);
-    // Step 11: "Your Loop" label fades in 500ms after diagram completes
-    setTimeout(() => setShowYourLoop(true), 500);
-  }, []);
+    setTimeout(() => setShowLabel(true), 500);
+    setTimeout(() => setShowBreaker(true), 400);
+    getLoopBreaker(answers)
+      .then(setBreakerText)
+      .catch(() => setBreakerText('Could not load your Loop Breaker. Try again.'));
+  }, [answers]);
 
   return (
     <div className="screen loop-screen">
-      <div className="loop-screen-header">
+      <div className="loop-header">
         <div className="wordmark">Loop</div>
-        <div className="wordmark-tagline">understand what runs your habits.</div>
+        <div className="wordmark-sub">understand what runs your habits.</div>
       </div>
 
-      <div className="loop-screen-body">
-        {/* Step 11: "Your Loop" label */}
+      <div className="loop-body">
+        {/* "Your Loop" label — step 11 */}
         <motion.h1
           className="your-loop-label"
           initial={{ opacity: 0 }}
-          animate={{ opacity: showYourLoop ? 1 : 0 }}
+          animate={{ opacity: showLabel ? 1 : 0 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
+          aria-live="polite"
         >
           Your Loop
         </motion.h1>
 
-        {/* The diagram */}
+        {/* Animated loop diagram */}
         <div className="loop-diagram-wrap">
           <LoopDiagram
             answers={answers}
@@ -38,9 +47,25 @@ export default function LoopScreen({ answers, onReset }) {
           />
         </div>
 
-        {/* Stage 3+: Loop Breaker and Share will appear here */}
+        {/* Loop Breaker card — slides up after diagram done */}
+        {showBreaker && (
+          <LoopBreakerCard text={breakerText} delayMs={0} />
+        )}
 
-        {/* Reset */}
+        {/* Share button — fades in after card */}
+        {showBreaker && (
+          <ShareButton captureRef={captureRef} delayMs={300} />
+        )}
+
+        {/* ── Offscreen capture zone for html2canvas ── */}
+        <div ref={captureRef} className="capture-zone">
+          <div className="capture-title">Your Loop</div>
+          <div className="capture-diagram">
+            <StaticLoopDiagram answers={answers} />
+          </div>
+          <div className="capture-wordmark">Loop</div>
+        </div>
+
         <button className="back-link" onClick={onReset}>
           ← Start over
         </button>
