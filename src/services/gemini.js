@@ -1,11 +1,12 @@
 import { MOCK_BREAKER } from '../data/mockAI.js';
 
-// Toggle: true = use seeded mock text (default, works offline)
-//         false = call real Gemini API (Stage 4, requires API key)
-const MOCK_AI = true;
+// Set to false to use real Gemini API
+const MOCK_AI = false;
 
-// Replace with your Gemini API key for Stage 4
-const API_KEY = '';
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+
+// Use gemini-2.0-flash — works on free tier
+const MODEL = 'gemini-2.0-flash';
 
 function buildPrompt(answers) {
   return (
@@ -20,27 +21,41 @@ function buildPrompt(answers) {
 }
 
 export async function getLoopBreaker(answers) {
-  if (MOCK_AI) {
-    // Simulate a brief network delay for realistic feel
-    await new Promise((r) => setTimeout(r, 600));
+  if (MOCK_AI || !API_KEY) {
+    await new Promise((r) => setTimeout(r, 700));
     return MOCK_BREAKER;
   }
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: buildPrompt(answers) }] }],
-      }),
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: buildPrompt(answers) }] }],
+          generationConfig: {
+            maxOutputTokens: 120,
+            temperature: 0.7,
+          },
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.warn('Gemini API error:', res.status, err);
+      // Graceful fallback to mock on any API error
+      return MOCK_BREAKER;
     }
-  );
 
-  if (!response.ok) {
-    throw new Error(`Gemini API error: ${response.status}`);
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) return MOCK_BREAKER;
+
+    return text.trim();
+  } catch (err) {
+    console.warn('Gemini fetch failed, using mock:', err.message);
+    return MOCK_BREAKER;
   }
-
-  const data = await response.json();
-  return data.candidates[0].content.parts[0].text;
 }
