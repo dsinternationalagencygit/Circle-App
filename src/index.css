@@ -244,9 +244,9 @@ button { font-family: var(--font); cursor: pointer; background: none; border: no
 /* ── LOOP BREAKER CARD ───────────────────────────────────── */
 .loop-breaker-card {
   width: 100%;
-  background: var(--white);
+  background: #FFF8F8;
   border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
+  border-left: 4px solid var(--accent);
   border-radius: var(--r);
   padding: 18px 20px;
   margin-bottom: 4px;
@@ -257,7 +257,7 @@ button { font-family: var(--font); cursor: pointer; background: none; border: no
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.09em;
-  color: var(--muted);
+  color: var(--accent);
   text-transform: uppercase;
   margin-bottom: 10px;
 }
