@@ -39,6 +39,18 @@ export default function App() {
     }
   }
 
+  function handleBack() {
+    if (screen === 'question') {
+      if (currentQ === 1) {
+        // At Q2, go back to opening screen
+        setScreen('opening');
+      } else {
+        // Go back to previous question
+        setCurrentQ(currentQ - 1);
+      }
+    }
+  }
+
   function handleReset() {
     setAnswers(EMPTY);
     setCurrentQ(1);
@@ -55,6 +67,7 @@ export default function App() {
           currentQ={currentQ}
           answers={answers}
           onAnswer={handleAnswer}
+          onBack={handleBack}
         />
       )}
       {screen === 'loop' && (

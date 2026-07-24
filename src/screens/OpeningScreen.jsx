@@ -1,26 +1,26 @@
 import { motion } from 'framer-motion';
-import { QUESTIONS, VIKRAM_ANSWERS } from '../data/questions';
+import { QUESTIONS } from '../data/questions';
 
 export default function OpeningScreen({ onAnswer, onDemo }) {
   const q1 = QUESTIONS[0];
 
   return (
     <div className="screen opening-screen">
+      {/* Top Navbar */}
+      <div className="nav-bar">
+        <div className="nav-btn" style={{ opacity: 0 }}></div>
+        <span className="nav-title">Habit Loop Unmasker</span>
+        <div className="nav-btn" style={{ opacity: 0 }}></div>
+      </div>
+
       <motion.div
-        className="wordmark"
+        className="wordmark-wrap"
         initial={{ opacity: 0, y: -6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: 'easeOut' }}
       >
-        Loop
-      </motion.div>
-      <motion.div
-        className="wordmark-sub"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.35, delay: 0.1 }}
-      >
-        understand what runs your habits.
+        <h1 className="wordmark">Loop</h1>
+        <p className="wordmark-sub">understand what runs your habits.</p>
       </motion.div>
 
       <div className="opening-hero">
@@ -33,14 +33,14 @@ export default function OpeningScreen({ onAnswer, onDemo }) {
           Four taps. No typing.
         </motion.p>
 
-        <motion.h1
+        <motion.h2
           className="opening-question"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.38, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
         >
           {q1.text}
-        </motion.h1>
+        </motion.h2>
 
         <motion.div
           className="tile-grid"
@@ -58,22 +58,28 @@ export default function OpeningScreen({ onAnswer, onDemo }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.28, delay: 0.34 + i * 0.06 }}
             >
-              {option}
+              <div className="tile-icon-dot">{option[0]}</div>
+              <div className="tile-content">
+                <span className="tile-title">{option}</span>
+                <span className="tile-subtitle">Tap to configure</span>
+              </div>
             </motion.button>
           ))}
         </motion.div>
 
-        <motion.button
-          className="demo-link"
-          id="demo-link"
-          onClick={onDemo}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 0.6 }}
-          aria-label="Skip to Vikram's pre-filled loop demo"
-        >
-          See Vikram's Loop →
-        </motion.button>
+        <div className="demo-link-wrap">
+          <motion.button
+            className="demo-link"
+            id="demo-link"
+            onClick={onDemo}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3, delay: 0.6 }}
+            aria-label="Skip to Vikram's pre-filled loop demo"
+          >
+            See Vikram's Loop →
+          </motion.button>
+        </div>
       </div>
     </div>
   );
