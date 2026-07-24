@@ -19,148 +19,74 @@ import { motion, useAnimate, useMotionValue, animate } from 'framer-motion';
      7. Arc HABIT→REWARD (red, 2px) draws + "false reward" label 400ms
      8. REWARD node fades + scales in 400ms
      9. Arc REWARD→CUE (amber) draws + "sets up next trigger" label 400ms
-    10. HABIT→REWARD arc begins continuous opacity pulse (0.6↔1.0, 2s)
-    11. "Your Loop" label fades in 300ms (500ms after diagram done)
+    10. HABIT→REWARD arc: continuous opacity pulse (0.6↔1.0, 2s loop, never stops)
+    11. "Your Loop" label fades in 300ms (500ms after diagram done — done in LoopScreen)
    ---------------------------------------------------------------- */
 
-// Node positions (centre coords in 320×320 viewBox)
-const NODE_R = 28; // 56px diameter = 28px radius
+const NODE_R = 28; // radius = 28px → 56px diameter
+
+// Node centres in 320×320 viewBox (diamond)
 const NODES = {
-  CUE:     { cx: 160, cy: 52,  category: 'CUE',     answerKey: 'when'    },
-  CRAVING: { cx: 268, cy: 160, category: 'CRAVING',  answerKey: 'trigger' },
-  HABIT:   { cx: 160, cy: 268, category: 'HABIT',    answerKey: 'habit'   },
-  REWARD:  { cx: 52,  cy: 160, category: 'REWARD',   answerKey: 'feeling' },
+  CUE:     { cx: 160, cy: 52,  label: 'CUE',     answerKey: 'when'    },
+  CRAVING: { cx: 268, cy: 160, label: 'CRAVING',  answerKey: 'trigger' },
+  HABIT:   { cx: 160, cy: 268, label: 'HABIT',    answerKey: 'habit'   },
+  REWARD:  { cx: 52,  cy: 160, label: 'REWARD',   answerKey: 'feeling' },
 };
 
-// Arc definitions: quadratic Bézier control points chosen to curve nicely
-const ARCS = [
-  {
-    id: 'cue-craving',
-    from: 'CUE', to: 'CRAVING',
-    // control point slightly outside the circle boundary
-    cpx: 268, cpy: 52,
-    color: '#161616', strokeWidth: 1,
-    label: null,
-  },
-  {
-    id: 'craving-habit',
-    from: 'CRAVING', to: 'HABIT',
-    cpx: 268, cpy: 268,
-    color: '#161616', strokeWidth: 1,
-    label: null,
-  },
-  {
-    id: 'habit-reward',
-    from: 'HABIT', to: 'REWARD',
-    cpx: 160, cpy: 330,  // curves below
-    color: '#E8192C', strokeWidth: 2,
-    label: 'false reward',
-    isPulse: true,
-  },
-  {
-    id: 'reward-cue',
-    from: 'REWARD', to: 'CUE',
-    cpx: 52, cpy: 52,
-    color: '#F59E0B', strokeWidth: 1,
-    label: 'sets up next trigger',
-  },
-];
-
-// Helper: point on circle edge in the direction of a target point
-function edgePoint(fromNode, toNode, offset = 0) {
-  const dx = toNode.cx - fromNode.cx;
-  const dy = toNode.cy - fromNode.cy;
+// Return the point on a circle's perimeter towards a target direction
+function edgePt(node, dx, dy) {
   const len = Math.sqrt(dx * dx + dy * dy);
-  const r = NODE_R + offset;
   return {
-    x: fromNode.cx + (dx / len) * r,
-    y: fromNode.cy + (dy / len) * r,
+    x: node.cx + (dx / len) * (NODE_R + 2),
+    y: node.cy + (dy / len) * (NODE_R + 2),
   };
 }
 
-// Build a quadratic bezier path string
-function buildArcPath(arc) {
-  const from = NODES[arc.from];
-  const to   = NODES[arc.to];
-  const cp   = { cx: arc.cpx, cpy: arc.cpy };
+// Build quadratic Bézier path (M startX startY Q cpx cpy endX endY)
+function arcPath(fromKey, toKey, cpx, cpy) {
+  const from = NODES[fromKey];
+  const to   = NODES[toKey];
 
-  // For the HABIT→REWARD arc that curves below, we use a different approach
-  let startX, startY, endX, endY;
+  // Direction from 'from' towards control point
+  const start = edgePt(from, cpx - from.cx, cpy - from.cy);
+  // Direction into 'to' from control point
+  const end   = edgePt(to,   to.cx - cpx,   to.cy - cpy);
 
-  if (arc.id === 'habit-reward') {
-    // Curve below — control point is below both nodes
-    startX = from.cx;
-    startY = from.cy + NODE_R;
-    endX   = to.cx;
-    endY   = to.cy + NODE_R;
-  } else if (arc.id === 'reward-cue') {
-    // Curve left side
-    startX = to.cx - NODE_R; // from REWARD going left then up
-    startY = from.cy;
-    endX   = to.cx - NODE_R;
-    endY   = to.cy;
-
-    // Better: edge from REWARD upward to CUE leftward
-    const start = edgePoint(NODES.REWARD, { cx: 52, cy: 0 });
-    const end   = edgePoint(NODES.CUE,   { cx: 0,  cy: 52 });
-    startX = start.x; startY = start.y;
-    endX   = end.x;   endY   = end.y;
-  } else {
-    const start = edgePoint(from, to);
-    const end   = edgePoint(to, from);
-    startX = start.x; startY = start.y;
-    endX   = end.x;   endY   = end.y;
-  }
-
-  return `M ${startX} ${startY} Q ${arc.cpx} ${arc.cpy} ${endX} ${endY}`;
+  return `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} Q ${cpx} ${cpy} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
 }
 
-// Arrowhead marker component rendered in <defs>
-function ArrowMarker({ id, color }) {
+// Arrowhead marker
+function Marker({ id, color }) {
   return (
-    <marker
-      id={id}
-      markerWidth="8"
-      markerHeight="8"
-      refX="6"
-      refY="3"
-      orient="auto"
-    >
-      <path d="M0,0 L0,6 L8,3 z" fill={color} />
+    <marker id={id} markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+      <polygon points="0 0, 7 3.5, 0 7" fill={color} />
     </marker>
   );
 }
 
-// Single animated arc path
-function AnimatedArc({ arc, delay, onComplete }) {
-  const [scope, animateArc] = useAnimate();
+/* AnimatedArc — draws via stroke-dashoffset, starts its own timer */
+function AnimatedArc({ id, fromKey, toKey, cpx, cpy, color, strokeWidth, delay, isPulse }) {
+  const pathRef = useRef(null);
   const pulseOpacity = useMotionValue(1);
 
   useEffect(() => {
-    let cancelled = false;
+    let active = true;
+    const path = pathRef.current;
+    if (!path) return;
 
-    async function run() {
-      // Wait for the element to mount
-      await new Promise((r) => setTimeout(r, delay));
-      if (cancelled) return;
+    const len = path.getTotalLength();
+    path.style.strokeDasharray = len;
+    path.style.strokeDashoffset = len;
 
-      // Measure the path length
-      const path = scope.current;
-      if (!path) return;
-      const len = path.getTotalLength();
-      path.style.strokeDasharray = len;
-      path.style.strokeDashoffset = len;
-
-      // Draw animation
-      await animateArc(path, { strokeDashoffset: 0 }, {
-        duration: arc.strokeWidth === 2 ? 0.4 : 0.3,
+    const timer = setTimeout(async () => {
+      if (!active) return;
+      // Draw the arc
+      await animate(path, { strokeDashoffset: 0 }, {
+        duration: strokeWidth === 2 ? 0.4 : 0.3,
         ease: 'easeInOut',
       });
-
-      if (cancelled) return;
-
-      // Start pulse if this is the HABIT→REWARD arc
-      if (arc.isPulse) {
+      // Start infinite pulse for HABIT→REWARD
+      if (isPulse && active) {
         animate(pulseOpacity, 0.6, {
           duration: 1,
           ease: 'easeInOut',
@@ -168,22 +94,23 @@ function AnimatedArc({ arc, delay, onComplete }) {
           repeatType: 'reverse',
         });
       }
+    }, delay);
 
-      onComplete?.();
-    }
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [delay, strokeWidth, isPulse]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    run();
-    return () => { cancelled = true; };
-  }, [delay]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const markerId = `arrow-${arc.id}`;
+  const d = arcPath(fromKey, toKey, cpx, cpy);
+  const markerId = `arrow-${id}`;
 
   return (
     <motion.path
-      ref={scope}
-      d={buildArcPath(arc)}
-      stroke={arc.color}
-      strokeWidth={arc.strokeWidth}
+      ref={pathRef}
+      d={d}
+      stroke={color}
+      strokeWidth={strokeWidth}
       fill="none"
       markerEnd={`url(#${markerId})`}
       style={{ opacity: pulseOpacity }}
@@ -191,87 +118,74 @@ function AnimatedArc({ arc, delay, onComplete }) {
   );
 }
 
-// Arc label that fades in with the arc
-function ArcLabel({ arc, delay }) {
-  const [scope, animateLabel] = useAnimate();
+/* ArcLabel — fades in shortly after its arc draws */
+function ArcLabel({ x, y, color, text, delay, drawDuration }) {
+  const [scope, anim] = useAnimate();
 
   useEffect(() => {
-    async function run() {
-      await new Promise((r) => setTimeout(r, delay + (arc.strokeWidth === 2 ? 400 : 300)));
-      if (scope.current) {
-        animateLabel(scope.current, { opacity: 1 }, { duration: 0.2 });
-      }
-    }
-    run();
-  }, [delay]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!arc.label) return null;
-
-  // Position labels along arcs
-  let x, y, textAnchor = 'middle';
-  if (arc.id === 'habit-reward') {
-    x = 160; y = 312;
-  } else if (arc.id === 'reward-cue') {
-    x = 88; y = 92;
-  }
+    const timer = setTimeout(() => {
+      if (scope.current) anim(scope.current, { opacity: 1 }, { duration: 0.25 });
+    }, delay + drawDuration * 1000 + 50);
+    return () => clearTimeout(timer);
+  }, [delay, drawDuration]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <text
       ref={scope}
       x={x}
       y={y}
-      textAnchor={textAnchor}
+      textAnchor="middle"
       fontSize="9"
       fontFamily="'Space Grotesk', sans-serif"
       fontWeight="400"
-      fill={arc.color}
+      fill={color}
       opacity="0"
     >
-      {arc.label}
+      {text}
     </text>
   );
 }
 
-// Single node (circle + labels)
-function AnimatedNode({ node, answer, delay, isHabit, onComplete }) {
-  const [scope, animateNode] = useAnimate();
+/* AnimatedNode — fades + scales in; HABIT node gets spring pulse */
+function AnimatedNode({ nodeKey, answer, delay, isHabit }) {
+  const node = NODES[nodeKey];
+  const [scope, anim] = useAnimate();
+
+  // Truncate answer to fit node (max ~12 chars)
+  const display = answer
+    ? answer.length > 12 ? answer.slice(0, 11) + '\u2026' : answer
+    : '';
 
   useEffect(() => {
-    async function run() {
-      await new Promise((r) => setTimeout(r, delay));
+    const timer = setTimeout(async () => {
       if (!scope.current) return;
-
       if (isHabit) {
-        // Spring pulse for HABIT node
-        await animateNode(scope.current, { opacity: 1, scale: 1 }, { duration: 0.25 });
-        await animateNode(scope.current, { scale: 1.12 }, {
-          type: 'spring', stiffness: 600, damping: 15, duration: 0.15,
+        await anim(scope.current, { opacity: 1, scale: 1 }, { duration: 0.2, ease: 'easeOut' });
+        // Spring pulse to draw attention to the HABIT node
+        await anim(scope.current, { scale: 1.14 }, {
+          type: 'spring', stiffness: 600, damping: 12,
         });
-        await animateNode(scope.current, { scale: 1 }, {
-          type: 'spring', stiffness: 300, damping: 20, duration: 0.2,
+        await anim(scope.current, { scale: 1 }, {
+          type: 'spring', stiffness: 280, damping: 22,
         });
       } else {
-        await animateNode(scope.current, { opacity: 1, scale: 1 }, {
-          duration: 0.4, ease: 'easeOut',
+        await anim(scope.current, { opacity: 1, scale: 1 }, {
+          duration: 0.4, ease: [0.22, 1, 0.36, 1],
         });
       }
-
-      onComplete?.();
-    }
-    run();
-  }, [delay]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Truncate long answers to fit node
-  const displayAnswer = answer && answer.length > 12
-    ? answer.slice(0, 11) + '…'
-    : answer;
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [delay, isHabit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <motion.g
       ref={scope}
-      style={{ opacity: 0, scale: 0.7, transformOrigin: `${node.cx}px ${node.cy}px` }}
+      style={{
+        opacity: 0,
+        scale: 0.65,
+        transformOrigin: `${node.cx}px ${node.cy}px`,
+      }}
     >
-      {/* Node circle */}
       <circle
         cx={node.cx}
         cy={node.cy}
@@ -280,88 +194,86 @@ function AnimatedNode({ node, answer, delay, isHabit, onComplete }) {
         stroke="#161616"
         strokeWidth="2"
       />
-      {/* Category label (above answer) */}
+      {/* Category label */}
       <text
         x={node.cx}
-        y={node.cy - 6}
+        y={node.cy - 5}
         textAnchor="middle"
         fontSize="9"
         fontFamily="'Space Grotesk', sans-serif"
         fontWeight="400"
         fill="#9B9B9B"
+        aria-hidden="true"
       >
-        {node.category}
+        {node.label}
       </text>
       {/* Answer label */}
       <text
         x={node.cx}
-        y={node.cy + 9}
+        y={node.cy + 10}
         textAnchor="middle"
         fontSize="10"
         fontFamily="'Space Grotesk', sans-serif"
         fontWeight="600"
         fill="#161616"
       >
-        {displayAnswer}
+        {display}
       </text>
     </motion.g>
   );
 }
 
+/* ----------------------------------------------------------------
+   Main export
+   ---------------------------------------------------------------- */
 export default function LoopDiagram({ answers, onDiagramComplete }) {
-  // Visibility flags for each element — driven by sequential animation timing
-  // We use a ref-based approach: each element self-times via delay ms
-  
-  // Cumulative delays for each step:
-  // 1. Outer ring: starts at 0, takes 600ms
-  // 2. CUE node: 650ms start (600 + 50 gap)
-  // 3. Arc CUE→CRAVING: 1100ms (650 + 400 + 50)
-  // 4. CRAVING node: 1450ms (1100 + 300 + 50)
-  // 5. Arc CRAVING→HABIT: 1900ms (1450 + 400 + 50)
-  // 6. HABIT node: 2250ms
-  // 7. Arc HABIT→REWARD: 2700ms (HABIT spring ~400ms)
-  // 8. REWARD node: 3150ms
-  // 9. Arc REWARD→CUE: 3600ms
-  // Diagram complete: ~4050ms
-  // 11. "Your Loop" label: 4550ms (500ms after complete)
+  const ringRef = useRef(null);
+  const [ringScope, animRing] = useAnimate();
 
-  const DELAY = {
-    ring: 0,
-    cue: 650,
+  /* Cumulative delay schedule (ms):
+     0    → ring starts (600ms)
+     650  → CUE node (400ms)
+     1100 → arc CUE→CRAVING (300ms)
+     1450 → CRAVING node (400ms)
+     1900 → arc CRAVING→HABIT (300ms)
+     2250 → HABIT node (~500ms with spring)
+     2800 → arc HABIT→REWARD (400ms)
+     3250 → REWARD node (400ms)
+     3700 → arc REWARD→CUE (400ms)
+     4150 → diagram complete signal
+  */
+  const D = {
+    ring:            0,
+    cue:           650,
     arcCueCraving: 1100,
-    craving: 1450,
-    arcCravingHabit: 1900,
-    habit: 2250,
-    arcHabitReward: 2700,
-    reward: 3150,
-    arcRewardCue: 3600,
-    complete: 4100,
+    craving:       1450,
+    arcCravingHab: 1900,
+    habit:         2250,
+    arcHabReward:  2800,
+    reward:        3250,
+    arcRewardCue:  3700,
+    complete:      4150,
   };
 
-  // Outer ring animation
-  const ringRef = useRef(null);
-  const [ringScope, animateRing] = useAnimate();
-
+  // Step 1: outer ring
   useEffect(() => {
     if (!ringScope.current) return;
     const ring = ringScope.current;
-    const circumference = 2 * Math.PI * 148; // radius 148 of the outer guide ring
+    const circumference = 2 * Math.PI * 148;
     ring.style.strokeDasharray = circumference;
     ring.style.strokeDashoffset = circumference;
 
-    const timer = setTimeout(async () => {
-      await animateRing(ring, { strokeDashoffset: 0 }, { duration: 0.6, ease: 'easeInOut' });
-    }, DELAY.ring);
+    const t = setTimeout(() => {
+      animRing(ring, { strokeDashoffset: 0 }, { duration: 0.6, ease: 'easeInOut' });
+    }, D.ring);
 
-    return () => clearTimeout(timer);
+    return () => clearTimeout(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // "Diagram complete" callback
+  // Diagram complete callback → LoopScreen shows "Your Loop" + Loop Breaker
   useEffect(() => {
-    const timer = setTimeout(() => {
-      onDiagramComplete?.();
-    }, DELAY.complete);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => onDiagramComplete?.(), D.complete);
+    return () => clearTimeout(t);
   }, [onDiagramComplete]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -369,64 +281,87 @@ export default function LoopDiagram({ answers, onDiagramComplete }) {
       viewBox="0 0 320 320"
       width="100%"
       height="100%"
+      role="img"
+      aria-label="Animated habit loop diagram showing CUE, CRAVING, HABIT, and REWARD nodes"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="Habit loop diagram"
     >
       <defs>
-        {ARCS.map((arc) => (
-          <ArrowMarker key={arc.id} id={`arrow-${arc.id}`} color={arc.color} />
-        ))}
+        <Marker id="arrow-cue-craving"  color="#161616" />
+        <Marker id="arrow-craving-hab"  color="#161616" />
+        <Marker id="arrow-hab-reward"   color="#E8192C" />
+        <Marker id="arrow-reward-cue"   color="#F59E0B" />
       </defs>
 
-      {/* Step 1: Outer ring guide */}
+      {/* Step 1: outer guide ring */}
       <circle
         ref={ringScope}
-        cx="160"
-        cy="160"
-        r="148"
+        cx="160" cy="160" r="148"
         fill="none"
         stroke="#9B9B9B"
         strokeWidth="1"
       />
 
-      {/* Step 3: Arc CUE → CRAVING */}
-      <AnimatedArc arc={ARCS[0]} delay={DELAY.arcCueCraving} />
-      {/* Step 5: Arc CRAVING → HABIT */}
-      <AnimatedArc arc={ARCS[1]} delay={DELAY.arcCravingHabit} />
-      {/* Step 7: Arc HABIT → REWARD (red pulse arc) */}
-      <AnimatedArc arc={ARCS[2]} delay={DELAY.arcHabitReward} />
-      {/* Step 9: Arc REWARD → CUE (amber) */}
-      <AnimatedArc arc={ARCS[3]} delay={DELAY.arcRewardCue} />
+      {/* Arcs — rendered before nodes so nodes sit on top */}
+
+      {/* Step 3: CUE → CRAVING */}
+      <AnimatedArc
+        id="cue-craving"
+        fromKey="CUE" toKey="CRAVING"
+        cpx={268} cpy={52}
+        color="#161616" strokeWidth={1}
+        delay={D.arcCueCraving}
+      />
+
+      {/* Step 5: CRAVING → HABIT */}
+      <AnimatedArc
+        id="craving-hab"
+        fromKey="CRAVING" toKey="HABIT"
+        cpx={268} cpy={268}
+        color="#161616" strokeWidth={1}
+        delay={D.arcCravingHab}
+      />
+
+      {/* Step 7: HABIT → REWARD (red, thick, pulse) */}
+      <AnimatedArc
+        id="hab-reward"
+        fromKey="HABIT" toKey="REWARD"
+        cpx={160} cpy={320}
+        color="#E8192C" strokeWidth={2}
+        delay={D.arcHabReward}
+        isPulse
+      />
+
+      {/* Step 9: REWARD → CUE (amber) */}
+      <AnimatedArc
+        id="reward-cue"
+        fromKey="REWARD" toKey="CUE"
+        cpx={52} cpy={52}
+        color="#F59E0B" strokeWidth={1}
+        delay={D.arcRewardCue}
+      />
 
       {/* Arc labels */}
-      <ArcLabel arc={ARCS[2]} delay={DELAY.arcHabitReward} />
-      <ArcLabel arc={ARCS[3]} delay={DELAY.arcRewardCue} />
+      <ArcLabel
+        x={160} y={314}
+        color="#E8192C" text="false reward"
+        delay={D.arcHabReward} drawDuration={0.4}
+      />
+      <ArcLabel
+        x={86} y={94}
+        color="#F59E0B" text="sets up next trigger"
+        delay={D.arcRewardCue} drawDuration={0.4}
+      />
 
-      {/* Step 2: CUE node */}
-      <AnimatedNode
-        node={NODES.CUE}
-        answer={answers?.when}
-        delay={DELAY.cue}
-      />
-      {/* Step 4: CRAVING node */}
-      <AnimatedNode
-        node={NODES.CRAVING}
-        answer={answers?.trigger}
-        delay={DELAY.craving}
-      />
-      {/* Step 6: HABIT node (spring pulse) */}
-      <AnimatedNode
-        node={NODES.HABIT}
-        answer={answers?.habit}
-        delay={DELAY.habit}
-        isHabit
-      />
-      {/* Step 8: REWARD node */}
-      <AnimatedNode
-        node={NODES.REWARD}
-        answer={answers?.feeling}
-        delay={DELAY.reward}
-      />
+      {/* Nodes — on top of arcs */}
+
+      {/* Step 2: CUE */}
+      <AnimatedNode nodeKey="CUE"     answer={answers?.when}    delay={D.cue}    />
+      {/* Step 4: CRAVING */}
+      <AnimatedNode nodeKey="CRAVING" answer={answers?.trigger} delay={D.craving} />
+      {/* Step 6: HABIT (spring pulse) */}
+      <AnimatedNode nodeKey="HABIT"   answer={answers?.habit}   delay={D.habit}   isHabit />
+      {/* Step 8: REWARD */}
+      <AnimatedNode nodeKey="REWARD"  answer={answers?.feeling} delay={D.reward}  />
     </svg>
   );
 }
