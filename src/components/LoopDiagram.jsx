@@ -78,24 +78,21 @@ function Arc({ d, color, sw, markerId, delayS, dur }) {
   );
 }
 
+/** Red arc — draws then starts infinite opacity pulse */
 function PulsingArc({ d, color, sw, markerId, delayS, dur }) {
-  const opacity = useMotionValue(1);
-  useEffect(() => {
-    const t = setTimeout(() => {
-      animate(opacity, [1, 0.55, 1], {
-        duration: 2, ease: 'easeInOut', repeat: Infinity,
-      });
-    }, (delayS + dur) * 1000);
-    return () => clearTimeout(t);
-  }, [delayS, dur]); // eslint-disable-line react-hooks/exhaustive-deps
-
   return (
-    <motion.path d={d} stroke={color} strokeWidth={sw} fill="none"
+    <motion.path
+      d={d}
+      stroke={color}
+      strokeWidth={sw}
+      fill="none"
       markerEnd={`url(#${markerId})`}
-      initial={{ pathLength: 0 }}
-      animate={{ pathLength: 1 }}
-      transition={{ delay: delayS, duration: dur, ease: 'easeInOut' }}
-      style={{ opacity }}
+      initial={{ pathLength: 0, opacity: 0.5 }}
+      animate={{ pathLength: 1, opacity: [0.5, 1, 0.5] }}
+      transition={{
+        pathLength: { delay: delayS, duration: dur, ease: 'easeInOut' },
+        opacity: { duration: 2, repeat: Infinity, ease: 'easeInOut' }
+      }}
     />
   );
 }
