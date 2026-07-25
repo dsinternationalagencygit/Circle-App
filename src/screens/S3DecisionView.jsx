@@ -5,37 +5,46 @@ import { DecisionCircle } from '../components/DecisionCircle';
 export function S3DecisionView({ 
   contacts = [], 
   chosenContact = null, 
-  whyText = '', 
-  onReset 
+  whyText = '',
+  aiContent = null,
+  aiStatus = 'idle',
+  aiErrorMessage = '',
+  savedAtTimestamp = null,
+  onCopyMessage,
+  onCallContact,
+  onShareBoth,
+  onReadAloudMessage,
+  onReadAloudGuide
 }) {
   const [animationSettled, setAnimationSettled] = useState(false);
 
-  // Default contacts for Stage 1 Visual Scaffold if none provided
-  const demoContacts = contacts.length > 0 ? contacts : [
-    { id: '1', name: 'Ravi', tagSummary: 'Up late • Steady in crisis' },
-    { id: '2', name: 'Amma', tagSummary: 'Family' },
-    { id: '3', name: 'Siddharth', tagSummary: 'Up late' }
-  ];
+  // Format contacts for the DecisionCircle component
+  const formattedContacts = contacts.map(c => ({
+    id: c.id,
+    name: c.name,
+    phone: c.phone,
+    tagSummary: (c.tags && c.tags.length > 0) ? c.tags.slice(0, 2).join(' • ') : ''
+  }));
 
-  const demoChosenId = chosenContact ? chosenContact.id : '1';
-  const demoWhy = whyText || "It is 11pm. Ravi is up late and steady in a crisis.";
-  const demoChosenName = chosenContact ? chosenContact.name : 'Ravi';
+  const chosenId = chosenContact ? chosenContact.id : (formattedContacts[0]?.id || '1');
+  const chosenName = chosenContact ? chosenContact.name : (formattedContacts[0]?.name || 'Contact');
+  const chosenPhone = chosenContact ? chosenContact.phone : '';
 
   return (
     <div className="decision-stage">
       <DecisionCircle 
-        contacts={demoContacts}
-        chosenContactId={demoChosenId}
+        contacts={formattedContacts}
+        chosenContactId={chosenId}
         onAnimationComplete={() => {
           setTimeout(() => setAnimationSettled(true), 400);
         }}
       />
 
       <div className="decision-why-text" aria-live="polite">
-        {demoWhy}
+        {whyText}
       </div>
 
-      {/* Cards Shell: Staggered entrance, layout ONLY with empty bodies in Stage 1 */}
+      {/* Cards Shell: Staggered entrance */}
       {animationSettled && (
         <motion.div 
           className="cards-wrap"
@@ -43,6 +52,23 @@ export function S3DecisionView({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: 'easeOut' }}
         >
+          {/* Saved Cache Timestamp Indicator if using cached response */}
+          {savedAtTimestamp && (
+            <div style={{ fontSize: '12px', color: 'var(--muted)', textAlign: 'center', marginBottom: '-4px' }}>
+              Saved from {savedAtTimestamp}
+            </div>
+          )}
+
+          {/* Network Failure Card if AI failed and no cache */}
+          {aiStatus === 'error' && !aiContent && (
+            <div className="card" style={{ borderColor: 'var(--red)' }}>
+              <div className="card-label" style={{ color: 'var(--red)' }}>Network Error</div>
+              <div className="card-body">
+                Cannot reach the network right now.
+              </div>
+            </div>
+          )}
+
           {/* Card 1: SEND THIS */}
           <motion.div 
             className="card"
@@ -51,14 +77,36 @@ export function S3DecisionView({
             transition={{ duration: 0.3, delay: 0, ease: 'easeOut' }}
           >
             <div className="card-label">Send this</div>
-            {/* Card body stays visibly empty in Stage 1 to prevent fake AI copy */}
             <div className="card-body" aria-label="Generated reach-out message body">
-              {/* Empty in Stage 1 Visual Scaffold */}
+              {aiContent ? aiContent.message : (aiStatus === 'loading' ? 'Drafting message...' : '')}
             </div>
             <div className="card-actions">
-              <button className="card-action-btn" aria-label="Copy message">Copy</button>
-              <button className="card-action-btn" aria-label={`Call ${demoChosenName}`}>Call {demoChosenName}</button>
-              <button className="card-speaker-btn" aria-label="Read message aloud">Read aloud</button>
+              <button 
+                className="card-action-btn" 
+                onClick={() => onCopyMessage && onCopyMessage(aiContent?.message)}
+                disabled={!aiContent}
+                aria-label="Copy message"
+              >
+                Copy
+              </button>
+              <a 
+                href={chosenPhone ? `tel:${chosenPhone}` : '#'} 
+                className="card-action-btn" 
+                onClick={(e) => {
+                  if (onCallContact) onCallContact(chosenContact);
+                }}
+                aria-label={`Call ${chosenName}`}
+              >
+                Call {chosenName}
+              </a>
+              <button 
+                className="card-speaker-btn" 
+                onClick={() => onReadAloudMessage && onReadAloudMessage(aiContent?.message)}
+                disabled={!aiContent}
+                aria-label="Read message aloud"
+              >
+                Read aloud
+              </button>
             </div>
           </motion.div>
 
@@ -70,13 +118,35 @@ export function S3DecisionView({
             transition={{ duration: 0.3, delay: 0.12, ease: 'easeOut' }}
           >
             <div className="card-label">For them</div>
-            {/* Card body stays visibly empty in Stage 1 to prevent fake AI copy */}
             <div className="card-body" aria-label="Recipient guidance body">
-              {/* Empty in Stage 1 Visual Scaffold */}
+              {aiContent ? (
+                <>
+                  <p style={{ marginBottom: '8px' }}>{aiContent.forThemDo}</p>
+                  <p style={{ color: 'var(--muted)', fontSize: '14px' }}>
+                    <strong style={{ color: 'var(--ink)' }}>Do not say:</strong> {aiContent.forThemAvoid}
+                  </p>
+                </>
+              ) : (
+                aiStatus === 'loading' ? 'Preparing guidance...' : ''
+              )}
             </div>
             <div className="card-actions">
-              <button className="card-action-btn" aria-label="Share both message and guide">Share both</button>
-              <button className="card-speaker-btn" aria-label="Read guide aloud">Read aloud</button>
+              <button 
+                className="card-action-btn" 
+                onClick={() => onShareBoth && onShareBoth(aiContent, chosenName)}
+                disabled={!aiContent}
+                aria-label="Share both message and guide"
+              >
+                Share both
+              </button>
+              <button 
+                className="card-speaker-btn" 
+                onClick={() => onReadAloudGuide && onReadAloudGuide(aiContent)}
+                disabled={!aiContent}
+                aria-label="Read guide aloud"
+              >
+                Read aloud
+              </button>
             </div>
           </motion.div>
         </motion.div>

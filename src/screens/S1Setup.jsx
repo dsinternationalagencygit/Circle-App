@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getContacts, saveContacts } from '../services/storage';
 
 const TAG_OPTIONS = [
   "up late",
@@ -7,41 +8,37 @@ const TAG_OPTIONS = [
   "do not call if I have been drinking"
 ];
 
-export function S1Setup({ initialContacts = [], onSave }) {
-  const [contacts, setContacts] = useState(() => {
-    if (initialContacts.length > 0) return initialContacts;
-    return [
-      { id: '1', name: 'Ravi', phone: '9876543210', tags: ['up late', 'steady in a crisis'] },
-      { id: '2', name: 'Amma', phone: '9876543211', tags: ['family'] },
-      { id: '3', name: 'Siddharth', phone: '9876543212', tags: ['up late'] }
-    ];
-  });
+export function S1Setup({ onSave }) {
+  const [contacts, setContacts] = useState(() => getContacts());
 
   const handleNameChange = (index, value) => {
     const updated = [...contacts];
-    updated[index].name = value;
+    updated[index] = { ...updated[index], name: value };
     setContacts(updated);
   };
 
   const handlePhoneChange = (index, value) => {
     const updated = [...contacts];
-    updated[index].phone = value;
+    updated[index] = { ...updated[index], phone: value };
     setContacts(updated);
   };
 
   const handleToggleTag = (index, tag) => {
     const updated = [...contacts];
     const currentTags = updated[index].tags || [];
+    let nextTags;
     if (currentTags.includes(tag)) {
-      updated[index].tags = currentTags.filter(t => t !== tag);
+      nextTags = currentTags.filter(t => t !== tag);
     } else {
-      updated[index].tags = [...currentTags, tag];
+      nextTags = [...currentTags, tag];
     }
+    updated[index] = { ...updated[index], tags: nextTags };
     setContacts(updated);
   };
 
   const handleSave = () => {
-    onSave(contacts);
+    saveContacts(contacts);
+    if (onSave) onSave(contacts);
   };
 
   return (
@@ -55,15 +52,15 @@ export function S1Setup({ initialContacts = [], onSave }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         {contacts.map((c, idx) => (
-          <div key={c.id} className="contact-card">
+          <div key={c.id || idx} className="contact-card">
             <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Person {idx + 1}
             </div>
 
             <div className="contact-input-group">
-              <label className="contact-label" htmlFor={`name-${c.id}`}>Name</label>
+              <label className="contact-label" htmlFor={`name-${c.id || idx}`}>Name</label>
               <input 
-                id={`name-${c.id}`}
+                id={`name-${c.id || idx}`}
                 type="text" 
                 value={c.name}
                 onChange={(e) => handleNameChange(idx, e.target.value)}
@@ -72,9 +69,9 @@ export function S1Setup({ initialContacts = [], onSave }) {
             </div>
 
             <div className="contact-input-group">
-              <label className="contact-label" htmlFor={`phone-${c.id}`}>Phone number</label>
+              <label className="contact-label" htmlFor={`phone-${c.id || idx}`}>Phone number</label>
               <input 
-                id={`phone-${c.id}`}
+                id={`phone-${c.id || idx}`}
                 type="tel" 
                 value={c.phone}
                 onChange={(e) => handlePhoneChange(idx, e.target.value)}
