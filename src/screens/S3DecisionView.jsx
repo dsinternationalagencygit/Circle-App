@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { DecisionCircle } from '../components/DecisionCircle';
-import { copyToClipboard, shareBothContent } from '../services/share';
+import { shareBothContent } from '../services/share';
+import { formatWhatsAppUrl } from '../services/selection';
 
 export function S3DecisionView({ 
   contacts = [], 
@@ -10,12 +11,10 @@ export function S3DecisionView({
   aiContent = null,
   aiStatus = 'idle',
   savedAtTimestamp = null,
-  onReadAloudMessage,
   onReadAloudGuide,
   onInactivityTimeout
 }) {
   const [animationSettled, setAnimationSettled] = useState(false);
-  const [copiedMsg, setCopiedMsg] = useState(false);
   const [sharedBoth, setSharedBoth] = useState(false);
 
   useEffect(() => {
@@ -37,15 +36,6 @@ export function S3DecisionView({
   const chosenName = chosenContact ? chosenContact.name : (formattedContacts[0]?.name || 'Contact');
   const chosenPhone = chosenContact ? chosenContact.phone : '';
 
-  const handleCopy = async () => {
-    if (!aiContent?.message) return;
-    const isSuccessful = await copyToClipboard(aiContent.message);
-    if (isSuccessful) {
-      setCopiedMsg(true);
-      setTimeout(() => setCopiedMsg(false), 2000);
-    }
-  };
-
   const handleShare = async () => {
     if (!aiContent) return;
     const isSuccessful = await shareBothContent(aiContent, chosenName);
@@ -53,6 +43,12 @@ export function S3DecisionView({
       setSharedBoth(true);
       setTimeout(() => setSharedBoth(false), 2000);
     }
+  };
+
+  const handleOpenWhatsApp = () => {
+    if (!aiContent?.message) return;
+    const whatsAppUrl = formatWhatsAppUrl(chosenPhone, aiContent.message);
+    window.open(whatsAppUrl, '_blank');
   };
 
   return (
@@ -91,6 +87,7 @@ export function S3DecisionView({
             </div>
           )}
 
+          {/* Card 1: SEND THIS */}
           <motion.div 
             className="card"
             initial={{ opacity: 0, y: 12 }}
@@ -101,33 +98,32 @@ export function S3DecisionView({
             <div className="card-body" aria-label="Generated reach-out message body">
               {aiContent ? aiContent.message : (aiStatus === 'loading' ? 'Drafting message...' : '')}
             </div>
-            <div className="card-actions">
-              <button 
-                className="card-action-btn" 
-                onClick={handleCopy}
+
+            <div className="card1-actions-stacked">
+              <motion.button 
+                className="card1-btn-primary" 
+                onClick={handleOpenWhatsApp}
                 disabled={!aiContent}
-                aria-label="Copy message to clipboard"
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                aria-label={`Send message on WhatsApp to ${chosenName}`}
               >
-                {copiedMsg ? 'Copied' : 'Copy'}
-              </button>
-              <a 
+                Send on WhatsApp
+              </motion.button>
+
+              <motion.a 
                 href={chosenPhone ? `tel:${chosenPhone}` : '#'} 
-                className="card-action-btn"
+                className="card1-btn-secondary"
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                 aria-label={`Call ${chosenName}`}
               >
                 Call {chosenName}
-              </a>
-              <button 
-                className="card-speaker-btn" 
-                onClick={() => onReadAloudMessage && onReadAloudMessage(aiContent?.message)}
-                disabled={!aiContent}
-                aria-label="Read message aloud"
-              >
-                Read aloud
-              </button>
+              </motion.a>
             </div>
           </motion.div>
 
+          {/* Card 2: FOR THEM */}
           <motion.div 
             className="card"
             initial={{ opacity: 0, y: 12 }}
@@ -147,9 +143,20 @@ export function S3DecisionView({
                 aiStatus === 'loading' ? 'Preparing guidance...' : ''
               )}
             </div>
-            <div className="card-actions">
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '4px' }}>
               <button 
-                className="card-action-btn" 
+                style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: 'var(--amber)',
+                  background: 'none',
+                  border: 'none',
+                  minHeight: '44px',
+                  padding: '0',
+                  display: 'inline-flex',
+                  alignItems: 'center'
+                }}
                 onClick={handleShare}
                 disabled={!aiContent}
                 aria-label="Share both message and guide"
@@ -157,7 +164,7 @@ export function S3DecisionView({
                 {sharedBoth ? 'Shared / Copied' : 'Share both'}
               </button>
               <button 
-                className="card-speaker-btn" 
+                className="card2-speaker-btn" 
                 onClick={() => onReadAloudGuide && onReadAloudGuide(aiContent)}
                 disabled={!aiContent}
                 aria-label="Read guide aloud"

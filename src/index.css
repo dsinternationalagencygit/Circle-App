@@ -359,44 +359,63 @@ input:focus-visible {
   min-height: 48px;
 }
 
-.card-actions {
+.card1-actions-stacked {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-top: 4px;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
 }
 
-.card-action-btn {
+.card1-btn-primary {
+  width: 100%;
+  height: 52px;
+  border-radius: 10px;
+  background-color: var(--amber);
+  color: #0E1116;
+  font-size: 16px;
+  font-weight: 700;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.card1-btn-secondary {
+  width: 100%;
+  height: 52px;
+  border-radius: 10px;
+  background-color: transparent;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.card2-speaker-btn {
   font-size: 14px;
   font-weight: 700;
   color: var(--amber);
   background: none;
   border: none;
   min-height: 44px;
-  padding: 0 8px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
-  text-decoration: none;
+  cursor: pointer;
 }
 
-.card-action-btn:hover {
+.card2-speaker-btn:hover {
   text-decoration: underline;
-}
-
-.card-speaker-btn {
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--muted);
-  background: none;
-  border: none;
-  min-height: 44px;
-  padding: 0 8px;
-  display: inline-flex;
-  align-items: center;
-}
-
-.card-speaker-btn:hover {
-  color: var(--ink);
 }
 
 /* ── S4 ESCALATION ───────────────────────────────────────── */

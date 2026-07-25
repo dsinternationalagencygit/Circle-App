@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateSelection, formatLocalTimeHour, isNightTime } from './selection';
+import { evaluateSelection, formatLocalTimeHour, isNightTime, formatWhatsAppUrl } from './selection';
 
 describe('Deterministic Contact Selection Engine', () => {
   const dayTime = new Date('2026-07-25T14:00:00'); // 2pm (Day)
@@ -105,7 +105,7 @@ describe('Deterministic Contact Selection Engine', () => {
   });
 });
 
-describe('Pure Helpers: Time Formatting & Validation', () => {
+describe('Pure Helpers: Time Formatting & WhatsApp URL Generation', () => {
   it('formats local time hour correctly', () => {
     const amTime = new Date('2026-07-25T09:15:00');
     expect(formatLocalTimeHour(amTime)).toBe('9am');
@@ -126,5 +126,15 @@ describe('Pure Helpers: Time Formatting & Validation', () => {
 
     const afternoon = new Date('2026-07-25T14:00:00'); // 2:00pm
     expect(isNightTime(afternoon)).toBe(false);
+  });
+
+  it('formats WhatsApp URL correctly with 10-digit number and encoded message', () => {
+    const url = formatWhatsAppUrl('9876543210', 'Hello Ravi!');
+    expect(url).toBe('https://wa.me/919876543210?text=Hello%20Ravi!');
+  });
+
+  it('formats WhatsApp URL correctly when number already has 91 prefix and formatting characters', () => {
+    const url = formatWhatsAppUrl('+91 98765-43210', 'Need someone');
+    expect(url).toBe('https://wa.me/919876543210?text=Need%20someone');
   });
 });

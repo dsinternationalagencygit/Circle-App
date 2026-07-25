@@ -27,6 +27,27 @@ export function isNightTime(date = new Date()) {
 }
 
 /**
+ * Formats a phone number and message into a sanitized wa.me URL for WhatsApp.
+ * 
+ * @param {string} [phone=''] - Raw saved phone number string.
+ * @param {string} [message=''] - Generated reach-out message text.
+ * @returns {string} Fully formatted https://wa.me/<number>?text=<encoded> URL.
+ */
+export function formatWhatsAppUrl(phone = '', message = '') {
+  const digitsOnly = (phone || '').replace(/\D/g, '');
+  let sanitizedNumber = digitsOnly;
+
+  if (digitsOnly.length === 10) {
+    sanitizedNumber = `91${digitsOnly}`;
+  } else if (digitsOnly.length === 12 && digitsOnly.startsWith('91')) {
+    sanitizedNumber = digitsOnly;
+  }
+
+  const encodedMsg = encodeURIComponent(message || '');
+  return `https://wa.me/${sanitizedNumber}?text=${encodedMsg}`;
+}
+
+/**
  * Evaluates contact eligibility and deterministically selects the optimal recipient.
  * 
  * @param {Array<Object>} [contacts=[]] - Array of user contact objects.
