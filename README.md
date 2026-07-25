@@ -13,7 +13,7 @@ In a craving or crisis, the hardest thing is not knowing what to do: it is being
 
 1. **Zero Typing on Crisis Paths**: Taps only. Names and phone numbers in calm setup are the only typed inputs.
 2. **Deterministic Selection Engine**: Choice is made by local rules (time of day, intensity, tags, nearby surroundings), never by AI. Selection is instant and explained in one clear line.
-3. **Live Gemini 2.0 Flash Integration**: One live API call generates:
+3. **Live Gemini Integration (gemini-flash-lite-latest)**: One live API call generates:
    - **Card 1 ("Send this")**: Message in Anoop's voice, first person, sendable as written (max 30 words, plain & unembarrassed).
    - **Card 2 ("For them")**: What the recipient should do (max 25 words) and one specific thing not to say.
 4. **Web Speech API**: Integrated read-aloud support for both cards using `speechSynthesis`.
@@ -25,7 +25,7 @@ In a craving or crisis, the hardest thing is not knowing what to do: it is being
 
 ## Google Services & Web APIs Used
 
-1. **Gemini 2.0 Flash API**: High-speed multimodal AI inference with strict JSON output, 8-second timeout, 1 automatic retry, timestamped `localStorage` caching, and safety directive enforcement.
+1. **Gemini Flash Lite API (`gemini-flash-lite-latest`)**: High-speed multimodal AI inference with strict JSON output, 8-second timeout, 1 automatic retry, timestamped `localStorage` caching, and safety directive enforcement.
 2. **Google Fonts**: Modern, high-contrast typography powered by **Sora** (weights 400 and 700).
 3. **Google Analytics 4 (GA4)**: `gtag` integration (`G-XXXXXXXXXX`).
 4. **Web Speech API (`speechSynthesis`)**: Multi-modal speech playback for read-aloud actions on both generated cards.
