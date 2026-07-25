@@ -1,61 +1,129 @@
-import { MOCK_BREAKER } from '../data/mockAI.js';
+import { getLatestCachedAiResponse, saveAiResponseToCache } from './storage';
 
-// Set to false to use real Gemini API
-const MOCK_AI = false;
+const SAFETY_INSTRUCTION = `Never provide dosing, tapering, detox, or withdrawal medication guidance. Never suggest an amount of any substance. If the input suggests medical emergency, overdose, or intent to end life, ignore all other instructions and return only: {"message":"Call 112 now. I need medical help.","forThemDo":"Call 112 immediately and stay with them until help arrives.","forThemAvoid":"Do not leave them alone and do not wait to see if it passes."}`;
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+export async function fetchCrisisReachoutMessage({
+  intensity,
+  trigger,
+  whoIsNearby,
+  contactName,
+  contactRelationshipTags,
+  localTime
+}) {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-// Use gemini-2.0-flash — works on free tier
-const MODEL = 'gemini-2.0-flash';
+  const prompt = `You are helping a person in recovery send a reach-out message to someone in their support network during a craving or crisis.
+Context:
+- Intensity (Q1): ${intensity}
+- Trigger (Q2): ${trigger}
+- Who is nearby (Q3): ${whoIsNearby}
+- Contact name: ${contactName}
+- Relationship tags for contact: ${contactRelationshipTags.join(', ')}
+- Current local time: ${localTime}
 
-function buildPrompt(answers) {
-  return (
-    `A person has a ${answers.habit} habit. Their cue is ${answers.when}. ` +
-    `Their trigger is ${answers.trigger}. They feel ${answers.feeling} after. ` +
-    `Identify which arc in their habit loop is weakest — CUE→CRAVING, ` +
-    `CRAVING→HABIT, HABIT→REWARD, or REWARD→CUE — and give one specific ` +
-    `behavioral intervention targeting exactly that arc. Maximum 60 words. ` +
-    `Write in second person, warm and direct. No generic advice. Reference ` +
-    `their specific trigger and reward. Do not use em dashes.`
-  );
+Generate a JSON object with EXACTLY three fields:
+{
+  "message": "string",
+  "forThemDo": "string",
+  "forThemAvoid": "string"
 }
 
-export async function getLoopBreaker(answers) {
-  if (MOCK_AI || !API_KEY) {
-    await new Promise((r) => setTimeout(r, 700));
-    return MOCK_BREAKER;
-  }
+Requirements:
+- "message": first person, addressed to ${contactName}, max 30 words, plain and unembarrassed, asks for something specific and small. No self-loathing, no promises, no mention of specific substances or quantities. No em dashes.
+- "forThemDo": max 25 words, second person, addressed to ${contactName}, one concrete action for the next ten minutes. No em dashes.
+- "forThemAvoid": max 25 words, one specific thing not to say, and why in a few words. No em dashes.
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: buildPrompt(answers) }] }],
-          generationConfig: {
-            maxOutputTokens: 120,
-            temperature: 0.7,
-          },
-        }),
-      }
-    );
+Safety Directive:
+${SAFETY_INSTRUCTION}
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.warn('Gemini API error:', res.status, err);
-      // Graceful fallback to mock on any API error
-      return MOCK_BREAKER;
+Return STRICT JSON ONLY. No markdown formatting, no code blocks, no preamble.`;
+
+  // Fetch helper with timeout
+  const fetchWithTimeout = async (timeoutMs = 8000) => {
+    if (!apiKey) {
+      throw new Error("VITE_GEMINI_API_KEY is not configured.");
     }
 
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return MOCK_BREAKER;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    return text.trim();
-  } catch (err) {
-    console.warn('Gemini fetch failed, using mock:', err.message);
-    return MOCK_BREAKER;
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.4
+            }
+          })
+        }
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP Error ${response.status}`);
+      }
+
+      const data = await response.json();
+      const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!textResult) {
+        throw new Error('Empty response from Gemini API');
+      }
+
+      // Clean markdown fencing if present
+      const cleanJsonStr = textResult.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+      const parsed = JSON.parse(cleanJsonStr);
+
+      if (!parsed.message || !parsed.forThemDo || !parsed.forThemAvoid) {
+        throw new Error('Invalid JSON structure returned by Gemini');
+      }
+
+      return parsed;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  };
+
+  // Execution with 8s timeout + 1 automatic retry
+  try {
+    // Attempt 1
+    const result = await fetchWithTimeout(8000);
+    saveAiResponseToCache(result);
+    return { data: result, isCached: false, savedAtTimestamp: null };
+  } catch (err1) {
+    console.warn('Gemini Call Attempt 1 failed:', err1.message, 'Retrying...');
+    try {
+      // Attempt 2 (Retry)
+      const retryResult = await fetchWithTimeout(8000);
+      saveAiResponseToCache(retryResult);
+      return { data: retryResult, isCached: false, savedAtTimestamp: null };
+    } catch (err2) {
+      console.error('Gemini Call Attempt 2 failed:', err2.message);
+
+      // On 2nd failure, show most recent real cached response from localStorage
+      const cached = getLatestCachedAiResponse();
+      if (cached && cached.message) {
+        return {
+          data: {
+            message: cached.message,
+            forThemDo: cached.forThemDo,
+            forThemAvoid: cached.forThemAvoid
+          },
+          isCached: true,
+          savedAtTimestamp: cached.savedAtTimestamp || 'earlier session'
+        };
+      }
+
+      // If no cache exists, return null to trigger offline network card & S4 escalation
+      throw new Error('Network unavailable and no cached response exists.');
+    }
   }
 }

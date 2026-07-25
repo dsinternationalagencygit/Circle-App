@@ -7,19 +7,31 @@ import { S3TapSequence } from './screens/S3TapSequence';
 import { S3DecisionView } from './screens/S3DecisionView';
 import { S4Escalation } from './screens/S4Escalation';
 import { getContacts, getReachoutsThisMonth, logReachout } from './services/storage';
-import { evaluateSelection } from './services/selection';
+import { evaluateSelection, formatLocalTimeHour } from './services/selection';
+import { fetchCrisisReachoutMessage } from './services/gemini';
+import { speakText, stopSpeech } from './services/speech';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('S2_CRISIS_ENTRY');
   const [reachoutCount, setReachoutCount] = useState(0);
   const [contacts, setContacts] = useState([]);
+  
+  // Decision & AI state
   const [selectionState, setSelectionState] = useState({
     chosenContact: null,
     whyText: '',
     answers: {}
   });
+  const [aiState, setAiState] = useState({
+    content: null,
+    status: 'idle', // 'idle' | 'loading' | 'success' | 'error'
+    savedAtTimestamp: null
+  });
 
   useEffect(() => {
+    // Stop speech synthesis on screen changes
+    stopSpeech();
+
     // Load contacts and reach-out count on mount
     const savedContacts = getContacts();
     setContacts(savedContacts);
@@ -33,7 +45,7 @@ export default function App() {
     setCurrentScreen('S3_TAPS');
   };
 
-  const handleTapsComplete = (answers) => {
+  const handleTapsComplete = async (answers) => {
     const activeContacts = getContacts();
     setContacts(activeContacts);
 
@@ -41,7 +53,7 @@ export default function App() {
     const q2 = answers[2];
     const q3 = answers[3];
 
-    // Run deterministic selection rules engine
+    // Run local deterministic selection rules engine
     const result = evaluateSelection(activeContacts, q1, q2, q3, new Date());
 
     if (!result.chosenContact) {
@@ -50,8 +62,10 @@ export default function App() {
       return;
     }
 
+    const chosen = result.chosenContact;
+
     setSelectionState({
-      chosenContact: result.chosenContact,
+      chosenContact: chosen,
       whyText: result.whyText,
       answers
     });
@@ -61,7 +75,39 @@ export default function App() {
     const updatedReachouts = getReachoutsThisMonth();
     setReachoutCount(updatedReachouts.length);
 
+    // Transition immediately to S3 Decision View with loading AI status
     setCurrentScreen('S3_DECISION');
+    setAiState({ content: null, status: 'loading', savedAtTimestamp: null });
+
+    // Trigger live Gemini call
+    try {
+      const aiResponse = await fetchCrisisReachoutMessage({
+        intensity: q1,
+        trigger: q2,
+        whoIsNearby: q3,
+        contactName: chosen.name,
+        contactRelationshipTags: chosen.tags || [],
+        localTime: formatLocalTimeHour(new Date())
+      });
+
+      setAiState({
+        content: aiResponse.data,
+        status: 'success',
+        savedAtTimestamp: aiResponse.savedAtTimestamp
+      });
+    } catch (err) {
+      console.error('AI call failed:', err.message);
+      setAiState({
+        content: null,
+        status: 'error',
+        savedAtTimestamp: null
+      });
+
+      // Auto-surface S4 escalation if network fails & no cache exists
+      setTimeout(() => {
+        setCurrentScreen('S4_ESCALATION');
+      }, 3000);
+    }
   };
 
   const handleEscalate = () => {
@@ -71,6 +117,18 @@ export default function App() {
   const handleSaveSetup = (savedContacts) => {
     setContacts(savedContacts);
     setCurrentScreen('S2_CRISIS_ENTRY');
+  };
+
+  // Speech handlers
+  const handleReadAloudMessage = (msg) => {
+    if (msg) speakText(msg);
+  };
+
+  const handleReadAloudGuide = (content) => {
+    if (content) {
+      const fullGuideText = `${content.forThemDo}. Do not say: ${content.forThemAvoid}`;
+      speakText(fullGuideText);
+    }
   };
 
   return (
@@ -100,6 +158,11 @@ export default function App() {
             contacts={contacts}
             chosenContact={selectionState.chosenContact}
             whyText={selectionState.whyText}
+            aiContent={aiState.content}
+            aiStatus={aiState.status}
+            savedAtTimestamp={aiState.savedAtTimestamp}
+            onReadAloudMessage={handleReadAloudMessage}
+            onReadAloudGuide={handleReadAloudGuide}
             onReset={() => setCurrentScreen('S2_CRISIS_ENTRY')}
           />
         )}
