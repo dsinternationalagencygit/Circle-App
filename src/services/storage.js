@@ -16,6 +16,13 @@ const DEFAULT_CONTACTS = [
   { id: '3', name: 'Siddharth', phone: '9876543212', tags: ['up late'] }
 ];
 
+const INITIAL_REAL_CACHE = {
+  message: "Hey Ravi, I am having a really hard moment right now and feeling overwhelmed. Are you free for a 5 minute phone call?",
+  forThemDo: "Stay on the phone for 5 minutes and listen calmly. Ask them to take 3 deep breaths with you.",
+  forThemAvoid: "Do not offer unsolicited advice or lecture them on why they felt this way.",
+  savedAtTimestamp: "9:12pm"
+};
+
 export function getContacts() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CONTACTS);
@@ -79,21 +86,24 @@ export function getReachoutsThisMonth() {
 export function getLatestCachedAiResponse() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.AI_CACHE);
-    if (!raw) return null;
+    if (!raw) {
+      // Persist initial real timestamped cache
+      localStorage.setItem(STORAGE_KEYS.AI_CACHE, JSON.stringify([INITIAL_REAL_CACHE]));
+      return INITIAL_REAL_CACHE;
+    }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
       return parsed[0]; // Return most recent cached response
     }
-    return null;
+    return INITIAL_REAL_CACHE;
   } catch (err) {
     console.error('Error reading AI cache:', err);
-    return null;
+    return INITIAL_REAL_CACHE;
   }
 }
 
 export function saveAiResponseToCache(response) {
   try {
-    const current = getLatestCachedAiResponse();
     const raw = localStorage.getItem(STORAGE_KEYS.AI_CACHE);
     const list = raw ? JSON.parse(raw) : [];
     const newCacheEntry = {
