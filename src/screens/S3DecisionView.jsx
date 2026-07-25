@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { DecisionCircle } from '../components/DecisionCircle';
+import { copyToClipboard, shareBothContent } from '../services/share';
 
 export function S3DecisionView({ 
   contacts = [], 
@@ -8,15 +9,23 @@ export function S3DecisionView({
   whyText = '',
   aiContent = null,
   aiStatus = 'idle',
-  aiErrorMessage = '',
   savedAtTimestamp = null,
-  onCopyMessage,
-  onCallContact,
-  onShareBoth,
   onReadAloudMessage,
-  onReadAloudGuide
+  onReadAloudGuide,
+  onInactivityTimeout
 }) {
   const [animationSettled, setAnimationSettled] = useState(false);
+  const [copiedMsg, setCopiedMsg] = useState(false);
+  const [sharedBoth, setSharedBoth] = useState(false);
+
+  // 5-minute inactivity timer escalation rule (S4 reached automatically if no action taken for 5 minutes)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (onInactivityTimeout) onInactivityTimeout();
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearTimeout(timer);
+  }, [onInactivityTimeout]);
 
   // Format contacts for the DecisionCircle component
   const formattedContacts = contacts.map(c => ({
@@ -29,6 +38,24 @@ export function S3DecisionView({
   const chosenId = chosenContact ? chosenContact.id : (formattedContacts[0]?.id || '1');
   const chosenName = chosenContact ? chosenContact.name : (formattedContacts[0]?.name || 'Contact');
   const chosenPhone = chosenContact ? chosenContact.phone : '';
+
+  const handleCopy = async () => {
+    if (!aiContent?.message) return;
+    const ok = await copyToClipboard(aiContent.message);
+    if (ok) {
+      setCopiedMsg(true);
+      setTimeout(() => setCopiedMsg(false), 2000);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!aiContent) return;
+    const ok = await shareBothContent(aiContent, chosenName);
+    if (ok) {
+      setSharedBoth(true);
+      setTimeout(() => setSharedBoth(false), 2000);
+    }
+  };
 
   return (
     <div className="decision-stage">
@@ -83,18 +110,15 @@ export function S3DecisionView({
             <div className="card-actions">
               <button 
                 className="card-action-btn" 
-                onClick={() => onCopyMessage && onCopyMessage(aiContent?.message)}
+                onClick={handleCopy}
                 disabled={!aiContent}
-                aria-label="Copy message"
+                aria-label="Copy message to clipboard"
               >
-                Copy
+                {copiedMsg ? 'Copied' : 'Copy'}
               </button>
               <a 
                 href={chosenPhone ? `tel:${chosenPhone}` : '#'} 
-                className="card-action-btn" 
-                onClick={(e) => {
-                  if (onCallContact) onCallContact(chosenContact);
-                }}
+                className="card-action-btn"
                 aria-label={`Call ${chosenName}`}
               >
                 Call {chosenName}
@@ -133,11 +157,11 @@ export function S3DecisionView({
             <div className="card-actions">
               <button 
                 className="card-action-btn" 
-                onClick={() => onShareBoth && onShareBoth(aiContent, chosenName)}
+                onClick={handleShare}
                 disabled={!aiContent}
                 aria-label="Share both message and guide"
               >
-                Share both
+                {sharedBoth ? 'Shared / Copied' : 'Share both'}
               </button>
               <button 
                 className="card-speaker-btn" 

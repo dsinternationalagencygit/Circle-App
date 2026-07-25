@@ -163,6 +163,7 @@ export default function App() {
             savedAtTimestamp={aiState.savedAtTimestamp}
             onReadAloudMessage={handleReadAloudMessage}
             onReadAloudGuide={handleReadAloudGuide}
+            onInactivityTimeout={() => setCurrentScreen('S4_ESCALATION')}
             onReset={() => setCurrentScreen('S2_CRISIS_ENTRY')}
           />
         )}
