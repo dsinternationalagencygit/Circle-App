@@ -1,78 +1,75 @@
-import { useState } from 'react';
-import './index.css';
-import OpeningScreen from './screens/OpeningScreen';
-import QuestionScreen from './screens/QuestionScreen';
-import LoopScreen from './screens/LoopScreen';
-import { VIKRAM_ANSWERS } from './data/questions';
-
-const EMPTY = { habit: null, when: null, trigger: null, feeling: null };
+import React, { useState } from 'react';
+import { Header } from './components/Header';
+import { HelplineStrip } from './components/HelplineStrip';
+import { S1Setup } from './screens/S1Setup';
+import { S2CrisisEntry } from './screens/S2CrisisEntry';
+import { S3TapSequence } from './screens/S3TapSequence';
+import { S3DecisionView } from './screens/S3DecisionView';
+import { S4Escalation } from './screens/S4Escalation';
 
 export default function App() {
-  const [screen,   setScreen]   = useState('opening'); // 'opening' | 'question' | 'loop'
-  const [answers,  setAnswers]  = useState(EMPTY);
-  const [currentQ, setCurrentQ] = useState(1); // index into QUESTIONS[]; 1 = Q2
+  const [currentScreen, setCurrentScreen] = useState('S2_CRISIS_ENTRY');
+  const [reachoutCount, setReachoutCount] = useState(0);
 
-  // Demo: jump straight to loop with Vikram's seeded answers
-  function handleDemo() {
-    setAnswers(VIKRAM_ANSWERS);
-    setScreen('loop');
-  }
+  // Flow navigation handlers
+  const handleStartCrisis = () => {
+    setCurrentScreen('S3_TAPS');
+  };
 
-  // Called by every tile tap on every screen
-  function handleAnswer(key, value) {
-    const next = { ...answers, [key]: value };
-    setAnswers(next);
+  const handleTapsComplete = (answers) => {
+    // Proceed to Decision Screen
+    setCurrentScreen('S3_DECISION');
+  };
 
-    if (key === 'habit') {
-      // Q1 answered on opening screen → advance to Q2
-      setCurrentQ(1);
-      setScreen('question');
-    } else if (key === 'when') {
-      // Q2 → Q3
-      setCurrentQ(2);
-    } else if (key === 'trigger') {
-      // Q3 → Q4
-      setCurrentQ(3);
-    } else if (key === 'feeling') {
-      // Q4 → 800ms pause → loop screen
-      setTimeout(() => setScreen('loop'), 800);
-    }
-  }
+  const handleEscalate = () => {
+    setCurrentScreen('S4_ESCALATION');
+  };
 
-  function handleBack() {
-    if (screen === 'question') {
-      if (currentQ === 1) {
-        // At Q2, go back to opening screen
-        setScreen('opening');
-      } else {
-        // Go back to previous question
-        setCurrentQ(currentQ - 1);
-      }
-    }
-  }
-
-  function handleReset() {
-    setAnswers(EMPTY);
-    setCurrentQ(1);
-    setScreen('opening');
-  }
+  const handleSaveSetup = (savedContacts) => {
+    setCurrentScreen('S2_CRISIS_ENTRY');
+  };
 
   return (
-    <div className="app">
-      {screen === 'opening' && (
-        <OpeningScreen onAnswer={handleAnswer} onDemo={handleDemo} />
-      )}
-      {screen === 'question' && (
-        <QuestionScreen
-          currentQ={currentQ}
-          answers={answers}
-          onAnswer={handleAnswer}
-          onBack={handleBack}
+    <div className="app-container">
+      <main className="stage">
+        <Header 
+          currentScreen={currentScreen} 
+          onNavigate={(screen) => setCurrentScreen(screen)} 
         />
-      )}
-      {screen === 'loop' && (
-        <LoopScreen answers={answers} onReset={handleReset} />
-      )}
+
+        {currentScreen === 'S2_CRISIS_ENTRY' && (
+          <S2CrisisEntry 
+            reachoutCount={reachoutCount}
+            onStartCrisis={handleStartCrisis}
+            onEscalate={handleEscalate}
+          />
+        )}
+
+        {currentScreen === 'S3_TAPS' && (
+          <S3TapSequence 
+            onComplete={handleTapsComplete}
+          />
+        )}
+
+        {currentScreen === 'S3_DECISION' && (
+          <S3DecisionView 
+            onReset={() => setCurrentScreen('S2_CRISIS_ENTRY')}
+          />
+        )}
+
+        {currentScreen === 'S4_ESCALATION' && (
+          <S4Escalation />
+        )}
+
+        {currentScreen === 'S1_SETUP' && (
+          <S1Setup 
+            onSave={handleSaveSetup}
+          />
+        )}
+      </main>
+
+      {/* Helpline strip present on EVERY screen */}
+      <HelplineStrip />
     </div>
   );
 }
