@@ -2,6 +2,12 @@
  * Deterministic Selection Rules Engine & Pure Helper Functions for Circle
  */
 
+/**
+ * Formats a Date object into a short 12-hour local time string (e.g. "11pm", "9am").
+ * 
+ * @param {Date} [date=new Date()] - The target date instance to format.
+ * @returns {string} Formatted hour string with am/pm suffix.
+ */
 export function formatLocalTimeHour(date = new Date()) {
   const hours = date.getHours();
   const ampm = hours >= 12 ? 'pm' : 'am';
@@ -9,11 +15,27 @@ export function formatLocalTimeHour(date = new Date()) {
   return `${displayHour}${ampm}`;
 }
 
+/**
+ * Determines whether a given Date falls within night hours (10pm to 6am).
+ * 
+ * @param {Date} [date=new Date()] - The target date instance to check.
+ * @returns {boolean} True if the local hour is >= 22 (10pm) or < 6 (6am).
+ */
 export function isNightTime(date = new Date()) {
   const hours = date.getHours();
   return hours >= 22 || hours < 6; // 10pm to 6am
 }
 
+/**
+ * Evaluates contact eligibility and deterministically selects the optimal recipient.
+ * 
+ * @param {Array<Object>} [contacts=[]] - Array of user contact objects.
+ * @param {string} [q1Answer=''] - Intensity answer ("Manageable" | "Building" | "Strong" | "I am about to").
+ * @param {string} [q2Answer=''] - Trigger answer ("Stress" | "Alone" | "A place or person" | "No reason").
+ * @param {string} [q3Answer=''] - Nearby surroundings answer ("Nobody" | "Family" | "Friends" | "Strangers").
+ * @param {Date} [date=new Date()] - Current date instance for local time evaluation.
+ * @returns {Object} Object containing chosenContact, whyText explanation line, and reasonRule status.
+ */
 export function evaluateSelection(contacts = [], q1Answer = '', q2Answer = '', q3Answer = '', date = new Date()) {
   if (!contacts || contacts.length === 0) {
     return { chosenContact: null, whyText: '', reasonRule: 'NO_CONTACTS' };
@@ -24,63 +46,63 @@ export function evaluateSelection(contacts = [], q1Answer = '', q2Answer = '', q
   const formattedTime = formatLocalTimeHour(date);
 
   // Step 1: Filter out ineligible contacts
-  let eligible = contacts.filter(contact => {
-    const hasTag = (tag) => (contact.tags || []).includes(tag);
+  let eligibleContacts = contacts.filter(contactItem => {
+    const hasTag = (targetTag) => (contactItem.tags || []).includes(targetTag);
     if (isHighIntensity && hasTag("do not call if I have been drinking")) {
       return false;
     }
     return true;
   });
 
-  if (eligible.length === 0) {
+  if (eligibleContacts.length === 0) {
     return { chosenContact: null, whyText: '', reasonRule: 'ALL_EXCLUDED' };
   }
 
-  let chosen = null;
+  let chosenContactNode = null;
   let reasonDetails = [];
 
   // Helper matcher
-  const findWithTag = (candidates, tag) => candidates.find(c => (c.tags || []).includes(tag));
+  const findWithTag = (candidates, targetTag) => candidates.find(candidate => (candidate.tags || []).includes(targetTag));
 
   // Step 2: Night time preference for "up late" (10pm - 6am)
   if (isNight) {
-    const upLateContact = findWithTag(eligible, "up late");
+    const upLateContact = findWithTag(eligibleContacts, "up late");
     if (upLateContact) {
-      chosen = upLateContact;
-      reasonDetails.push(`${chosen.name} is up late`);
+      chosenContactNode = upLateContact;
+      reasonDetails.push(`${chosenContactNode.name} is up late`);
     }
   }
 
   // Step 3: High intensity preference for "steady in a crisis"
-  if (!chosen && isHighIntensity) {
-    const steadyContact = findWithTag(eligible, "steady in a crisis");
+  if (!chosenContactNode && isHighIntensity) {
+    const steadyContact = findWithTag(eligibleContacts, "steady in a crisis");
     if (steadyContact) {
-      chosen = steadyContact;
-      reasonDetails.push(`${chosen.name} is steady in a crisis`);
+      chosenContactNode = steadyContact;
+      reasonDetails.push(`${chosenContactNode.name} is steady in a crisis`);
     }
-  } else if (chosen && isHighIntensity && (chosen.tags || []).includes("steady in a crisis")) {
+  } else if (chosenContactNode && isHighIntensity && (chosenContactNode.tags || []).includes("steady in a crisis")) {
     reasonDetails.push("steady in a crisis");
   }
 
   // Step 4: Q3 "Nobody" preference for "family"
-  if (!chosen && q3Answer === "Nobody") {
-    const familyContact = findWithTag(eligible, "family");
+  if (!chosenContactNode && q3Answer === "Nobody") {
+    const familyContact = findWithTag(eligibleContacts, "family");
     if (familyContact) {
-      chosen = familyContact;
-      reasonDetails.push(`${chosen.name} is family`);
+      chosenContactNode = familyContact;
+      reasonDetails.push(`${chosenContactNode.name} is family`);
     }
-  } else if (chosen && q3Answer === "Nobody" && (chosen.tags || []).includes("family")) {
+  } else if (chosenContactNode && q3Answer === "Nobody" && (chosenContactNode.tags || []).includes("family")) {
     reasonDetails.push("family");
   }
 
   // Step 5: Fallback to first eligible contact
-  if (!chosen) {
-    chosen = eligible[0];
-    const firstTag = (chosen.tags && chosen.tags[0]) ? chosen.tags[0] : '';
+  if (!chosenContactNode) {
+    chosenContactNode = eligibleContacts[0];
+    const firstTag = (chosenContactNode.tags && chosenContactNode.tags[0]) ? chosenContactNode.tags[0] : '';
     if (firstTag) {
-      reasonDetails.push(`${chosen.name} is ${firstTag}`);
+      reasonDetails.push(`${chosenContactNode.name} is ${firstTag}`);
     } else {
-      reasonDetails.push(`${chosen.name} is in your circle`);
+      reasonDetails.push(`${chosenContactNode.name} is in your circle`);
     }
   }
 
@@ -93,7 +115,7 @@ export function evaluateSelection(contacts = [], q1Answer = '', q2Answer = '', q
   }
 
   return {
-    chosenContact: chosen,
+    chosenContact: chosenContactNode,
     whyText,
     reasonRule: 'DETERMINISTIC_MATCH'
   };

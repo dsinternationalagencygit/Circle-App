@@ -18,21 +18,19 @@ export function S3DecisionView({
   const [copiedMsg, setCopiedMsg] = useState(false);
   const [sharedBoth, setSharedBoth] = useState(false);
 
-  // 5-minute inactivity timer escalation rule (S4 reached automatically if no action taken for 5 minutes)
   useEffect(() => {
     const timer = setTimeout(() => {
       if (onInactivityTimeout) onInactivityTimeout();
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 5 * 60 * 1000);
 
     return () => clearTimeout(timer);
   }, [onInactivityTimeout]);
 
-  // Format contacts for the DecisionCircle component
-  const formattedContacts = contacts.map(c => ({
-    id: c.id,
-    name: c.name,
-    phone: c.phone,
-    tagSummary: (c.tags && c.tags.length > 0) ? c.tags.slice(0, 2).join(' • ') : ''
+  const formattedContacts = contacts.map(contact => ({
+    id: contact.id,
+    name: contact.name,
+    phone: contact.phone,
+    tagSummary: (contact.tags && contact.tags.length > 0) ? contact.tags.slice(0, 2).join(' • ') : ''
   }));
 
   const chosenId = chosenContact ? chosenContact.id : (formattedContacts[0]?.id || '1');
@@ -41,8 +39,8 @@ export function S3DecisionView({
 
   const handleCopy = async () => {
     if (!aiContent?.message) return;
-    const ok = await copyToClipboard(aiContent.message);
-    if (ok) {
+    const isSuccessful = await copyToClipboard(aiContent.message);
+    if (isSuccessful) {
       setCopiedMsg(true);
       setTimeout(() => setCopiedMsg(false), 2000);
     }
@@ -50,8 +48,8 @@ export function S3DecisionView({
 
   const handleShare = async () => {
     if (!aiContent) return;
-    const ok = await shareBothContent(aiContent, chosenName);
-    if (ok) {
+    const isSuccessful = await shareBothContent(aiContent, chosenName);
+    if (isSuccessful) {
       setSharedBoth(true);
       setTimeout(() => setSharedBoth(false), 2000);
     }
@@ -71,7 +69,6 @@ export function S3DecisionView({
         {whyText}
       </div>
 
-      {/* Cards Shell: Staggered entrance */}
       {animationSettled && (
         <motion.div 
           className="cards-wrap"
@@ -79,14 +76,12 @@ export function S3DecisionView({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: 'easeOut' }}
         >
-          {/* Saved Cache Timestamp Indicator if using cached response */}
           {savedAtTimestamp && (
             <div style={{ fontSize: '12px', color: 'var(--muted)', textAlign: 'center', marginBottom: '-4px' }}>
               Saved from {savedAtTimestamp}
             </div>
           )}
 
-          {/* Network Failure Card if AI failed and no cache */}
           {aiStatus === 'error' && !aiContent && (
             <div className="card" style={{ borderColor: 'var(--red)' }}>
               <div className="card-label" style={{ color: 'var(--red)' }}>Network Error</div>
@@ -96,7 +91,6 @@ export function S3DecisionView({
             </div>
           )}
 
-          {/* Card 1: SEND THIS */}
           <motion.div 
             className="card"
             initial={{ opacity: 0, y: 12 }}
@@ -134,7 +128,6 @@ export function S3DecisionView({
             </div>
           </motion.div>
 
-          {/* Card 2: FOR THEM */}
           <motion.div 
             className="card"
             initial={{ opacity: 0, y: 12 }}

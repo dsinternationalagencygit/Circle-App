@@ -96,7 +96,6 @@ export default function App() {
         savedAtTimestamp: aiResponse.savedAtTimestamp
       });
     } catch (err) {
-      console.error('AI call failed:', err.message);
       setAiState({
         content: null,
         status: 'error',

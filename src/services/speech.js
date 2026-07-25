@@ -3,25 +3,23 @@
  * Provides read-aloud functionality for Card 1 (Send this) and Card 2 (For them).
  */
 
-export function speakText(text) {
+export function speakText(targetText) {
   if (!('speechSynthesis' in window)) {
-    console.warn('Web Speech API is not supported in this browser.');
     return;
   }
 
   try {
-    // Stop any ongoing speech
     window.speechSynthesis.cancel();
 
-    if (!text || text.trim() === '') return;
+    if (!targetText || targetText.trim() === '') return;
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95; // Slightly slower, empathetic cadence
-    utterance.pitch = 1.0;
+    const speechUtterance = new SpeechSynthesisUtterance(targetText);
+    speechUtterance.rate = 0.95;
+    speechUtterance.pitch = 1.0;
 
-    window.speechSynthesis.speak(utterance);
-  } catch (err) {
-    console.error('Error during Web Speech API playback:', err);
+    window.speechSynthesis.speak(speechUtterance);
+  } catch (speechError) {
+    // Fail silently if speech synthesis fails
   }
 }
 

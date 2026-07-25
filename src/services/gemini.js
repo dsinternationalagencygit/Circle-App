@@ -2,6 +2,30 @@ import { getLatestCachedAiResponse, saveAiResponseToCache } from './storage';
 
 const SAFETY_INSTRUCTION = `Never provide dosing, tapering, detox, or withdrawal medication guidance. Never suggest an amount of any substance. If the input suggests medical emergency, overdose, or intent to end life, ignore all other instructions and return only: {"message":"Call 112 now. I need medical help.","forThemDo":"Call 112 immediately and stay with them until help arrives.","forThemAvoid":"Do not leave them alone and do not wait to see if it passes."}`;
 
+/**
+ * Gemini API Crisis Reach-Out Service
+ * 
+ * Input Variables:
+ * - intensity: Crisis strength from Q1 ("Manageable" | "Building" | "Strong" | "I am about to")
+ * - trigger: Crisis trigger from Q2 ("Stress" | "Alone" | "A place or person" | "No reason")
+ * - whoIsNearby: Surroundings from Q3 ("Nobody" | "Family" | "Friends" | "Strangers")
+ * - contactName: Name of the selected recipient
+ * - contactRelationshipTags: Tags associated with recipient (e.g., "up late", "family")
+ * - localTime: Formatted local time string (e.g., "11pm")
+ * 
+ * Expected JSON Shape:
+ * {
+ *   "message": string (first person, <= 30 words, plain reach-out),
+ *   "forThemDo": string (second person, <= 25 words, concrete 10-minute action),
+ *   "forThemAvoid": string (<= 25 words, specific thing NOT to say and why)
+ * }
+ * 
+ * Failure Path:
+ * - 8-second HTTP timeout per attempt.
+ * - 1 automatic retry on initial failure.
+ * - On second failure, falls back to the most recent timestamped real cached response from localStorage.
+ * - If no cache is present, throws an error to surface the network error card and auto-escalate to S4.
+ */
 export async function fetchCrisisReachoutMessage({
   intensity,
   trigger,
@@ -38,7 +62,6 @@ ${SAFETY_INSTRUCTION}
 
 Return STRICT JSON ONLY. No markdown formatting, no code blocks, no preamble.`;
 
-  // Fetch helper with timeout
   const fetchWithTimeout = async (timeoutMs = 8000) => {
     if (!apiKey) {
       throw new Error("VITE_GEMINI_API_KEY is not configured.");
@@ -70,59 +93,50 @@ Return STRICT JSON ONLY. No markdown formatting, no code blocks, no preamble.`;
         throw new Error(`HTTP Error ${response.status}`);
       }
 
-      const data = await response.json();
-      const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const geminiResponsePayload = await response.json();
+      const textResult = geminiResponsePayload.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (!textResult) {
         throw new Error('Empty response from Gemini API');
       }
 
-      // Clean markdown fencing if present
       const cleanJsonStr = textResult.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-      const parsed = JSON.parse(cleanJsonStr);
+      const parsedJsonResponse = JSON.parse(cleanJsonStr);
 
-      if (!parsed.message || !parsed.forThemDo || !parsed.forThemAvoid) {
+      if (!parsedJsonResponse.message || !parsedJsonResponse.forThemDo || !parsedJsonResponse.forThemAvoid) {
         throw new Error('Invalid JSON structure returned by Gemini');
       }
 
-      return parsed;
-    } catch (err) {
+      return parsedJsonResponse;
+    } catch (error) {
       clearTimeout(timeoutId);
-      throw err;
+      throw error;
     }
   };
 
-  // Execution with 8s timeout + 1 automatic retry
   try {
-    // Attempt 1
-    const result = await fetchWithTimeout(8000);
-    saveAiResponseToCache(result);
-    return { data: result, isCached: false, savedAtTimestamp: null };
-  } catch (err1) {
-    console.warn('Gemini Call Attempt 1 failed:', err1.message, 'Retrying...');
+    const primaryResult = await fetchWithTimeout(8000);
+    saveAiResponseToCache(primaryResult);
+    return { data: primaryResult, isCached: false, savedAtTimestamp: null };
+  } catch (firstAttemptError) {
     try {
-      // Attempt 2 (Retry)
       const retryResult = await fetchWithTimeout(8000);
       saveAiResponseToCache(retryResult);
       return { data: retryResult, isCached: false, savedAtTimestamp: null };
-    } catch (err2) {
-      console.error('Gemini Call Attempt 2 failed:', err2.message);
-
-      // On 2nd failure, show most recent real cached response from localStorage
-      const cached = getLatestCachedAiResponse();
-      if (cached && cached.message) {
+    } catch (retryAttemptError) {
+      const cachedResponse = getLatestCachedAiResponse();
+      if (cachedResponse && cachedResponse.message) {
         return {
           data: {
-            message: cached.message,
-            forThemDo: cached.forThemDo,
-            forThemAvoid: cached.forThemAvoid
+            message: cachedResponse.message,
+            forThemDo: cachedResponse.forThemDo,
+            forThemAvoid: cachedResponse.forThemAvoid
           },
           isCached: true,
-          savedAtTimestamp: cached.savedAtTimestamp || 'earlier session'
+          savedAtTimestamp: cachedResponse.savedAtTimestamp || 'earlier session'
         };
       }
 
-      // If no cache exists, return null to trigger offline network card & S4 escalation
       throw new Error('Network unavailable and no cached response exists.');
     }
   }

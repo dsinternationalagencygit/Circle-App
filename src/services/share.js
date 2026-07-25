@@ -2,27 +2,25 @@
  * Helper utilities for Copying to Clipboard and Web Share API
  */
 
-export async function copyToClipboard(text) {
-  if (!text) return false;
+export async function copyToClipboard(targetText) {
+  if (!targetText) return false;
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(targetText);
       return true;
     } else {
-      // Fallback for legacy environments
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'fixed';
-      textArea.style.left = '-9999px';
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      const successful = document.execCommand('copy');
-      document.body.removeChild(textArea);
-      return successful;
+      const textAreaElement = document.createElement('textarea');
+      textAreaElement.value = targetText;
+      textAreaElement.style.position = 'fixed';
+      textAreaElement.style.left = '-9999px';
+      document.body.appendChild(textAreaElement);
+      textAreaElement.focus();
+      textAreaElement.select();
+      const isCopySuccessful = document.execCommand('copy');
+      document.body.removeChild(textAreaElement);
+      return isCopySuccessful;
     }
-  } catch (err) {
-    console.error('Clipboard copy failed:', err);
+  } catch (clipboardError) {
     return false;
   }
 }
@@ -30,24 +28,22 @@ export async function copyToClipboard(text) {
 export async function shareBothContent(aiContent, contactName) {
   if (!aiContent) return false;
 
-  const shareText = `Message: "${aiContent.message}"\n\nFor ${contactName}: ${aiContent.forThemDo}\nDo not say: ${aiContent.forThemAvoid}`;
+  const combinedShareText = `Message: "${aiContent.message}"\n\nFor ${contactName}: ${aiContent.forThemDo}\nDo not say: ${aiContent.forThemAvoid}`;
 
   if (navigator.share) {
     try {
       await navigator.share({
         title: `Circle Reach-Out to ${contactName}`,
-        text: shareText
+        text: combinedShareText
       });
       return true;
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.warn('Navigator share failed, falling back to copy:', err);
-        return await copyToClipboard(shareText);
+    } catch (shareError) {
+      if (shareError.name !== 'AbortError') {
+        return await copyToClipboard(combinedShareText);
       }
       return false;
     }
   } else {
-    // Fallback on desktop to copy
-    return await copyToClipboard(shareText);
+    return await copyToClipboard(combinedShareText);
   }
 }

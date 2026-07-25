@@ -11,29 +11,29 @@ const TAG_OPTIONS = [
 export function S1Setup({ onSave }) {
   const [contacts, setContacts] = useState(() => getContacts());
 
-  const handleNameChange = (index, value) => {
-    const updated = [...contacts];
-    updated[index] = { ...updated[index], name: value };
-    setContacts(updated);
+  const handleNameChange = (contactIndex, value) => {
+    const updatedContacts = [...contacts];
+    updatedContacts[contactIndex] = { ...updatedContacts[contactIndex], name: value };
+    setContacts(updatedContacts);
   };
 
-  const handlePhoneChange = (index, value) => {
-    const updated = [...contacts];
-    updated[index] = { ...updated[index], phone: value };
-    setContacts(updated);
+  const handlePhoneChange = (contactIndex, value) => {
+    const updatedContacts = [...contacts];
+    updatedContacts[contactIndex] = { ...updatedContacts[contactIndex], phone: value };
+    setContacts(updatedContacts);
   };
 
-  const handleToggleTag = (index, tag) => {
-    const updated = [...contacts];
-    const currentTags = updated[index].tags || [];
+  const handleToggleTag = (contactIndex, targetTag) => {
+    const updatedContacts = [...contacts];
+    const currentTags = updatedContacts[contactIndex].tags || [];
     let nextTags;
-    if (currentTags.includes(tag)) {
-      nextTags = currentTags.filter(t => t !== tag);
+    if (currentTags.includes(targetTag)) {
+      nextTags = currentTags.filter(itemTag => itemTag !== targetTag);
     } else {
-      nextTags = [...currentTags, tag];
+      nextTags = [...currentTags, targetTag];
     }
-    updated[index] = { ...updated[index], tags: nextTags };
-    setContacts(updated);
+    updatedContacts[contactIndex] = { ...updatedContacts[contactIndex], tags: nextTags };
+    setContacts(updatedContacts);
   };
 
   const handleSave = () => {
@@ -51,30 +51,30 @@ export function S1Setup({ onSave }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {contacts.map((c, idx) => (
-          <div key={c.id || idx} className="contact-card">
+        {contacts.map((contact, contactIndex) => (
+          <div key={contact.id || contactIndex} className="contact-card">
             <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Person {idx + 1}
+              Person {contactIndex + 1}
             </div>
 
             <div className="contact-input-group">
-              <label className="contact-label" htmlFor={`name-${c.id || idx}`}>Name</label>
+              <label className="contact-label" htmlFor={`name-${contact.id || contactIndex}`}>Name</label>
               <input 
-                id={`name-${c.id || idx}`}
+                id={`name-${contact.id || contactIndex}`}
                 type="text" 
-                value={c.name}
-                onChange={(e) => handleNameChange(idx, e.target.value)}
+                value={contact.name}
+                onChange={(event) => handleNameChange(contactIndex, event.target.value)}
                 placeholder="Name"
               />
             </div>
 
             <div className="contact-input-group">
-              <label className="contact-label" htmlFor={`phone-${c.id || idx}`}>Phone number</label>
+              <label className="contact-label" htmlFor={`phone-${contact.id || contactIndex}`}>Phone number</label>
               <input 
-                id={`phone-${c.id || idx}`}
+                id={`phone-${contact.id || contactIndex}`}
                 type="tel" 
-                value={c.phone}
-                onChange={(e) => handlePhoneChange(idx, e.target.value)}
+                value={contact.phone}
+                onChange={(event) => handlePhoneChange(contactIndex, event.target.value)}
                 placeholder="Phone number"
               />
             </div>
@@ -83,13 +83,13 @@ export function S1Setup({ onSave }) {
               <div className="contact-label" style={{ marginBottom: '8px' }}>Tags</div>
               <div className="tag-options-grid">
                 {TAG_OPTIONS.map((tag) => {
-                  const isActive = (c.tags || []).includes(tag);
+                  const isActive = (contact.tags || []).includes(tag);
                   return (
                     <button
                       key={tag}
                       type="button"
                       className={`tag-chip ${isActive ? 'active' : ''}`}
-                      onClick={() => handleToggleTag(idx, tag)}
+                      onClick={() => handleToggleTag(contactIndex, tag)}
                       aria-pressed={isActive}
                     >
                       {tag}
