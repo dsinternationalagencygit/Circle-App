@@ -28,8 +28,7 @@ In a craving or crisis, the hardest thing is not knowing what to do: it is being
 1. **Gemini Flash Lite API (`gemini-flash-lite-latest`)**: High-speed multimodal AI inference with strict JSON output, 8-second timeout, 1 automatic retry, timestamped `localStorage` caching, and safety directive enforcement.
 2. **Google Fonts**: Modern, high-contrast typography powered by **Sora** (weights 400 and 700).
 3. **Google Analytics 4 (GA4)**: `gtag` integration (`G-XXXXXXXXXX`).
-4. **Web Speech API (`speechSynthesis`)**: Multi-modal speech playback for read-aloud actions on both generated cards.
-5. **Web Share API (`navigator.share`)**: One-tap native sharing for message + recipient guide, with fallback to clipboard on desktop.
+4. **Web Share API (`navigator.share`)**: One-tap native sharing for message + recipient guide, with fallback to clipboard on desktop.
 
 ---
 

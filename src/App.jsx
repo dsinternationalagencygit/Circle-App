@@ -9,7 +9,6 @@ import { S4Escalation } from './screens/S4Escalation';
 import { getContacts, getReachoutsThisMonth, logReachout } from './services/storage';
 import { evaluateSelection, formatLocalTimeHour } from './services/selection';
 import { fetchCrisisReachoutMessage } from './services/gemini';
-import { speakText, stopSpeech } from './services/speech';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('S2_CRISIS_ENTRY');
@@ -29,9 +28,6 @@ export default function App() {
   });
 
   useEffect(() => {
-    // Stop speech synthesis on screen changes
-    stopSpeech();
-
     // Load contacts and reach-out count on mount
     const savedContacts = getContacts();
     setContacts(savedContacts);
@@ -118,18 +114,6 @@ export default function App() {
     setCurrentScreen('S2_CRISIS_ENTRY');
   };
 
-  // Speech handlers
-  const handleReadAloudMessage = (msg) => {
-    if (msg) speakText(msg);
-  };
-
-  const handleReadAloudGuide = (content) => {
-    if (content) {
-      const fullGuideText = `${content.forThemDo}. Do not say: ${content.forThemAvoid}`;
-      speakText(fullGuideText);
-    }
-  };
-
   return (
     <div className="app-container">
       <main className="stage">
@@ -160,8 +144,6 @@ export default function App() {
             aiContent={aiState.content}
             aiStatus={aiState.status}
             savedAtTimestamp={aiState.savedAtTimestamp}
-            onReadAloudMessage={handleReadAloudMessage}
-            onReadAloudGuide={handleReadAloudGuide}
             onInactivityTimeout={() => setCurrentScreen('S4_ESCALATION')}
             onReset={() => setCurrentScreen('S2_CRISIS_ENTRY')}
           />

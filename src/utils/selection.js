@@ -27,13 +27,15 @@ export function isNightTime(date = new Date()) {
 }
 
 /**
- * Formats a phone number and message into a sanitized wa.me URL for WhatsApp.
+ * Formats a phone number, message, and recipient guidance into a sanitized wa.me URL for WhatsApp.
  * 
  * @param {string} [phone=''] - Raw saved phone number string.
  * @param {string} [message=''] - Generated reach-out message text.
+ * @param {string} [forThemDo=''] - Concrete recipient action.
+ * @param {string} [forThemAvoid=''] - Things for recipient to avoid saying.
  * @returns {string} Fully formatted https://wa.me/<number>?text=<encoded> URL.
  */
-export function formatWhatsAppUrl(phone = '', message = '') {
+export function formatWhatsAppUrl(phone = '', message = '', forThemDo = '', forThemAvoid = '') {
   const digitsOnly = (phone || '').replace(/\D/g, '');
   let sanitizedNumber = digitsOnly;
 
@@ -43,7 +45,12 @@ export function formatWhatsAppUrl(phone = '', message = '') {
     sanitizedNumber = digitsOnly;
   }
 
-  const encodedMsg = encodeURIComponent(message || '');
+  let fullBody = message || '';
+  if (forThemDo && forThemAvoid) {
+    fullBody = `${message}\n\nSent from Circle. What helps right now: ${forThemDo}\nPlease don't: ${forThemAvoid}`;
+  }
+
+  const encodedMsg = encodeURIComponent(fullBody);
   return `https://wa.me/${sanitizedNumber}?text=${encodedMsg}`;
 }
 

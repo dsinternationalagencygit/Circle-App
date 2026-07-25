@@ -128,13 +128,15 @@ describe('Pure Helpers: Time Formatting & WhatsApp URL Generation', () => {
     expect(isNightTime(afternoon)).toBe(false);
   });
 
-  it('formats WhatsApp URL correctly with 10-digit number and encoded message', () => {
-    const url = formatWhatsAppUrl('9876543210', 'Hello Ravi!');
-    expect(url).toBe('https://wa.me/919876543210?text=Hello%20Ravi!');
+  it('formats WhatsApp URL correctly with 10-digit number and combined guidance structure', () => {
+    const url = formatWhatsAppUrl('9876543210', 'Hello Ravi!', 'Listen for 5 mins.', 'Do not lecture.');
+    const expectedText = "Hello Ravi!\n\nSent from Circle. What helps right now: Listen for 5 mins.\nPlease don't: Do not lecture.";
+    expect(url).toBe(`https://wa.me/919876543210?text=${encodeURIComponent(expectedText)}`);
   });
 
   it('formats WhatsApp URL correctly when number already has 91 prefix and formatting characters', () => {
-    const url = formatWhatsAppUrl('+91 98765-43210', 'Need someone');
-    expect(url).toBe('https://wa.me/919876543210?text=Need%20someone');
+    const url = formatWhatsAppUrl('+91 98765-43210', 'Need someone', 'Stay on call.', 'Do not offer advice.');
+    const expectedText = "Need someone\n\nSent from Circle. What helps right now: Stay on call.\nPlease don't: Do not offer advice.";
+    expect(url).toBe(`https://wa.me/919876543210?text=${encodeURIComponent(expectedText)}`);
   });
 });

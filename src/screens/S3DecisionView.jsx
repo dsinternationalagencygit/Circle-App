@@ -11,7 +11,6 @@ export function S3DecisionView({
   aiContent = null,
   aiStatus = 'idle',
   savedAtTimestamp = null,
-  onReadAloudGuide,
   onInactivityTimeout
 }) {
   const [animationSettled, setAnimationSettled] = useState(false);
@@ -47,7 +46,12 @@ export function S3DecisionView({
 
   const handleOpenWhatsApp = () => {
     if (!aiContent?.message) return;
-    const whatsAppUrl = formatWhatsAppUrl(chosenPhone, aiContent.message);
+    const whatsAppUrl = formatWhatsAppUrl(
+      chosenPhone, 
+      aiContent.message, 
+      aiContent.forThemDo, 
+      aiContent.forThemAvoid
+    );
     window.open(whatsAppUrl, '_blank');
   };
 
@@ -144,7 +148,7 @@ export function S3DecisionView({
               )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginTop: '4px' }}>
               <button 
                 style={{
                   fontSize: '14px',
@@ -162,14 +166,6 @@ export function S3DecisionView({
                 aria-label="Share both message and guide"
               >
                 {sharedBoth ? 'Shared / Copied' : 'Share both'}
-              </button>
-              <button 
-                className="card2-speaker-btn" 
-                onClick={() => onReadAloudGuide && onReadAloudGuide(aiContent)}
-                disabled={!aiContent}
-                aria-label="Read guide aloud"
-              >
-                Read aloud
               </button>
             </div>
           </motion.div>
